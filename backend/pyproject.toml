@@ -17,6 +17,7 @@ dependencies = [
     "alembic>=1.13.0",
     # Configuración
     "pydantic-settings>=2.3.0",
+    "email-validator>=2.1.0",
     # Autenticación
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",

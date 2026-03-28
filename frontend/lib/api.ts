@@ -122,8 +122,10 @@ export interface ProductListResponse {
 
 export interface ComboItemResponse {
   id: string
-  product_id: string
+  product_id: string | null
   quantity: number
+  is_open: boolean
+  open_category: ProductCategory | null
   product: ProductResponse | null
 }
 
@@ -264,7 +266,11 @@ export const api = {
 
     crear: (
       comercioId: string,
-      data: { code: string; short_name: string; full_name: string; description?: string; price: number; is_available?: boolean; items?: { product_id: string; quantity: number }[] },
+      data: {
+        code: string; short_name: string; full_name: string; description?: string
+        price: number; is_available?: boolean
+        items?: ({ product_id: string; quantity: number; is_open: false } | { open_category: ProductCategory; quantity: number; is_open: true })[]
+      },
     ) =>
       request<ComboResponse>(`/comercios/${comercioId}/combos`, {
         method: "POST",
@@ -274,7 +280,10 @@ export const api = {
     editar: (
       comercioId: string,
       comboId: string,
-      data: { short_name?: string; full_name?: string; description?: string; price?: number; is_available?: boolean; items?: { product_id: string; quantity: number }[] },
+      data: {
+        short_name?: string; full_name?: string; description?: string; price?: number; is_available?: boolean
+        items?: ({ product_id: string; quantity: number; is_open: false } | { open_category: ProductCategory; quantity: number; is_open: true })[]
+      },
     ) =>
       request<ComboResponse>(`/comercios/${comercioId}/combos/${comboId}`, {
         method: "PATCH",

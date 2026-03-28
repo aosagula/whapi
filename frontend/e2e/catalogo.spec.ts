@@ -119,4 +119,18 @@ test.describe("Combos — navegación y render", () => {
     await expect(page.getByTestId("input-buscar-combo")).toBeVisible()
     await expect(page.getByTestId("select-filtro-estado-combo")).toBeVisible()
   })
+
+  test("el modal muestra el toggle de tipo de ítem (fijo / a elección)", async ({ page }) => {
+    await page.goto(`/${COMERCIO_ID}/ajustes/combos`)
+    await page.getByTestId("btn-nuevo-combo").click()
+    await expect(page.getByTestId("tab-producto-fijo")).toBeVisible()
+    await expect(page.getByTestId("tab-a-eleccion")).toBeVisible()
+  })
+
+  test("al cambiar a 'a elección' aparece el selector de categoría", async ({ page }) => {
+    await page.goto(`/${COMERCIO_ID}/ajustes/combos`)
+    await page.getByTestId("btn-nuevo-combo").click()
+    await page.getByTestId("tab-a-eleccion").click()
+    await expect(page.getByTestId("select-categoria-abierta")).toBeVisible()
+  })
 })

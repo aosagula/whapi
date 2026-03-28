@@ -134,7 +134,7 @@ class Combo(Base):
 
 
 class ComboItem(Base):
-    """Producto individual que forma parte de un combo."""
+    """Ítem de un combo: puede ser un producto fijo o un slot abierto (a elección del cliente)."""
 
     __tablename__ = "combo_items"
 
@@ -146,13 +146,18 @@ class ComboItem(Base):
         sa.ForeignKey("combos.id", ondelete="CASCADE"),
         nullable=False,
     )
-    product_id: Mapped[uuid.UUID] = mapped_column(
+    # Nulo cuando is_open=True (el cliente elige el producto dentro de la categoría)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
         sa.UUID(as_uuid=True),
         sa.ForeignKey("products.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     quantity: Mapped[int] = mapped_column(sa.Integer, default=1, nullable=False)
+    # Slot abierto: el cliente puede elegir cualquier producto de open_category
+    is_open: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
+    # Categoría elegible cuando is_open=True (ej: "empanada", "pizza", "drink")
+    open_category: Mapped[str | None] = mapped_column(sa.String(50), nullable=True)
 
     # Relaciones
     combo: Mapped[Combo] = relationship("Combo", back_populates="items")
-    product: Mapped[Product] = relationship("Product", back_populates="combo_items")
+    product: Mapped[Product | None] = relationship("Product", back_populates="combo_items")

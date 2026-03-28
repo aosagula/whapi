@@ -327,9 +327,25 @@ async def crear_combo(
     await db.flush()
 
     for item_data in data.items:
-        # Verificar que el producto existe en el comercio
-        await obtener_producto(item_data.product_id, business_id, db)
-        db.add(ComboItem(combo_id=combo.id, product_id=item_data.product_id, quantity=item_data.quantity))
+        if item_data.is_open:
+            # Slot abierto: no hay producto fijo, solo categoría elegible
+            db.add(ComboItem(
+                combo_id=combo.id,
+                product_id=None,
+                quantity=item_data.quantity,
+                is_open=True,
+                open_category=item_data.open_category,
+            ))
+        else:
+            # Producto fijo: verificar que pertenece al comercio
+            await obtener_producto(item_data.product_id, business_id, db)
+            db.add(ComboItem(
+                combo_id=combo.id,
+                product_id=item_data.product_id,
+                quantity=item_data.quantity,
+                is_open=False,
+                open_category=None,
+            ))
 
     await db.commit()
     return await obtener_combo(combo.id, business_id, db)
@@ -368,8 +384,23 @@ async def editar_combo(
         await db.flush()
 
         for item_data in data.items:
-            await obtener_producto(item_data.product_id, business_id, db)
-            db.add(ComboItem(combo_id=combo_id, product_id=item_data.product_id, quantity=item_data.quantity))
+            if item_data.is_open:
+                db.add(ComboItem(
+                    combo_id=combo_id,
+                    product_id=None,
+                    quantity=item_data.quantity,
+                    is_open=True,
+                    open_category=item_data.open_category,
+                ))
+            else:
+                await obtener_producto(item_data.product_id, business_id, db)
+                db.add(ComboItem(
+                    combo_id=combo_id,
+                    product_id=item_data.product_id,
+                    quantity=item_data.quantity,
+                    is_open=False,
+                    open_category=None,
+                ))
 
     await db.commit()
     return await obtener_combo(combo_id, business_id, db)

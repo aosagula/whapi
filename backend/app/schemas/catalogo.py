@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Productos ─────────────────────────────────────────────────────────────────
@@ -108,18 +108,36 @@ class CatalogItemResponse(BaseModel):
 # ── Combos ────────────────────────────────────────────────────────────────────
 
 class ComboItemCreate(BaseModel):
-    """Un producto dentro de un combo, con su cantidad."""
+    """Un ítem dentro de un combo: producto fijo o slot abierto a elección del cliente."""
 
-    product_id: uuid.UUID
+    # Producto fijo (is_open=False): product_id requerido
+    product_id: uuid.UUID | None = None
     quantity: int = Field(1, ge=1)
+    # Slot abierto (is_open=True): open_category requerido, product_id debe ser nulo
+    is_open: bool = False
+    open_category: Literal["pizza", "empanada", "drink"] | None = None
+
+    @model_validator(mode="after")
+    def validar_tipo_item(self) -> "ComboItemCreate":
+        if self.is_open:
+            if not self.open_category:
+                raise ValueError("open_category es requerido cuando is_open=True")
+            if self.product_id is not None:
+                raise ValueError("product_id debe ser nulo cuando is_open=True")
+        else:
+            if self.product_id is None:
+                raise ValueError("product_id es requerido cuando is_open=False")
+        return self
 
 
 class ComboItemResponse(BaseModel):
-    """Respuesta de un item de combo con datos del producto."""
+    """Respuesta de un ítem de combo."""
 
     id: uuid.UUID
-    product_id: uuid.UUID
+    product_id: uuid.UUID | None
     quantity: int
+    is_open: bool
+    open_category: str | None
     product: ProductResponse | None = None
 
     model_config = {"from_attributes": True}

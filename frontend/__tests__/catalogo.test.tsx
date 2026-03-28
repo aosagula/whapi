@@ -66,7 +66,10 @@ jest.mock("@/lib/api", () => ({
           is_available: true,
           created_at: "2025-01-01T00:00:00Z",
           updated_at: "2025-01-01T00:00:00Z",
-          items: [{ id: "ci1", product_id: "p1", quantity: 1, product: { id: "p1", code: "PIZ-MOZ", short_name: "Mozza", full_name: "Pizza Mozzarella", description: null, category: "pizza", is_available: true, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z", catalog_item: null, business_id: "b1" } }],
+          items: [
+            { id: "ci1", product_id: "p1", quantity: 1, is_open: false, open_category: null, product: { id: "p1", code: "PIZ-MOZ", short_name: "Mozza", full_name: "Pizza Mozzarella", description: null, category: "pizza", is_available: true, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z", catalog_item: null, business_id: "b1" } },
+            { id: "ci2", product_id: null, quantity: 6, is_open: true, open_category: "empanada", product: null },
+          ],
         },
       ]),
       crear: jest.fn(),
@@ -239,7 +242,7 @@ describe("CombosPage", () => {
     })
   })
 
-  it("muestra los productos del combo en la tabla", async () => {
+  it("muestra los productos del combo en la tabla (fijo y a elección)", async () => {
     const { default: CombosPage } = await import(
       "@/app/[comercio_id]/ajustes/combos/page"
     )
@@ -248,5 +251,7 @@ describe("CombosPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/1×\s*Mozza/)).toBeInTheDocument()
     })
+    // El slot abierto también debe aparecer
+    expect(screen.getByText(/6×\s*Empanada\s*elección/i)).toBeInTheDocument()
   })
 })

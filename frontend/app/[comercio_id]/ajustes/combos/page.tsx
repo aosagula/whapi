@@ -2,11 +2,13 @@
 
 /**
  * ABM de combos del catálogo.
- * Permite crear, editar y activar/desactivar combos con sus productos.
+ * Los combos admiten dos tipos de ítems:
+ *   - Producto fijo: un producto específico del catálogo.
+ *   - Slot abierto: el cliente elige cualquier producto de la categoría indicada.
  */
 import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
-import { Plus, Pencil, Ban, Search, X, CheckCircle, Trash2 } from "lucide-react"
+import { Plus, Pencil, Ban, Search, X, CheckCircle, Trash2, Shuffle } from "lucide-react"
 import { api, type ComboResponse, type ProductResponse, type ProductCategory } from "@/lib/api"
 import { ApiError } from "@/lib/api"
 
@@ -23,11 +25,15 @@ const CATEGORY_LABELS: Record<ProductCategory, string> = {
   drink: "Bebida",
 }
 
-// ── Modal de combo ────────────────────────────────────────────────────────────
+// ── Tipos internos del formulario ─────────────────────────────────────────────
 
-interface ComboItem {
-  product_id: string
-  quantity: number
+type FixedItem = { type: "fixed"; product_id: string; quantity: number }
+type OpenItem  = { type: "open";  open_category: ProductCategory; quantity: number }
+type ComboItemForm = FixedItem | OpenItem
+
+/** Identificador único del ítem en la lista local (para React keys y operaciones) */
+function itemKey(item: ComboItemForm, idx: number) {
+  return item.type === "fixed" ? `fixed-${item.product_id}` : `open-${item.open_category}-${idx}`
 }
 
 interface ComboFormData {
@@ -37,7 +43,7 @@ interface ComboFormData {
   description: string
   price: string
   is_available: boolean
-  items: ComboItem[]
+  items: ComboItemForm[]
 }
 
 const EMPTY_FORM: ComboFormData = {
@@ -49,6 +55,8 @@ const EMPTY_FORM: ComboFormData = {
   is_available: true,
   items: [],
 }
+
+// ── Modal de combo ────────────────────────────────────────────────────────────
 
 interface ComboModalProps {
   comercioId: string
@@ -68,43 +76,60 @@ function ComboModal({ comercioId, editing, allProducts, onClose, onSaved }: Comb
       description: editing.description ?? "",
       price: String(editing.price),
       is_available: editing.is_available,
-      items: editing.items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+      items: editing.items.map((i): ComboItemForm =>
+        i.is_open
+          ? { type: "open", open_category: i.open_category ?? "empanada", quantity: i.quantity }
+          : { type: "fixed", product_id: i.product_id ?? "", quantity: i.quantity },
+      ),
     }
   })
+
+  // Estado del selector de nuevo ítem
+  const [addType, setAddType] = useState<"fixed" | "open">("fixed")
+  const [selectedProductId, setSelectedProductId] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<ProductCategory>("empanada")
+  const [addQuantity, setAddQuantity] = useState(1)
+
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedProductId, setSelectedProductId] = useState("")
 
   function setField(field: keyof ComboFormData, value: unknown) {
     setForm((f) => ({ ...f, [field]: value }))
   }
 
-  function addItem() {
-    if (!selectedProductId) return
-    const already = form.items.find((i) => i.product_id === selectedProductId)
-    if (already) return
-    setForm((f) => ({
-      ...f,
-      items: [...f.items, { product_id: selectedProductId, quantity: 1 }],
-    }))
-    setSelectedProductId("")
-  }
-
-  function removeItem(productId: string) {
-    setForm((f) => ({ ...f, items: f.items.filter((i) => i.product_id !== productId) }))
-  }
-
-  function updateQuantity(productId: string, quantity: number) {
-    setForm((f) => ({
-      ...f,
-      items: f.items.map((i) => (i.product_id === productId ? { ...i, quantity } : i)),
-    }))
-  }
-
-  // Productos disponibles que aún no están en el combo
-  const availableToAdd = allProducts.filter(
-    (p) => p.is_available && !form.items.some((i) => i.product_id === p.id),
+  // Productos disponibles que aún no están en el combo como ítem fijo
+  const fixedProductIds = new Set(
+    form.items.filter((i): i is FixedItem => i.type === "fixed").map((i) => i.product_id),
   )
+  const availableToAdd = allProducts.filter((p) => p.is_available && !fixedProductIds.has(p.id))
+
+  function addItem() {
+    if (addType === "fixed") {
+      if (!selectedProductId) return
+      setForm((f) => ({
+        ...f,
+        items: [...f.items, { type: "fixed", product_id: selectedProductId, quantity: addQuantity }],
+      }))
+      setSelectedProductId("")
+    } else {
+      setForm((f) => ({
+        ...f,
+        items: [...f.items, { type: "open", open_category: selectedCategory, quantity: addQuantity }],
+      }))
+    }
+    setAddQuantity(1)
+  }
+
+  function removeItem(idx: number) {
+    setForm((f) => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))
+  }
+
+  function updateQuantity(idx: number, quantity: number) {
+    setForm((f) => ({
+      ...f,
+      items: f.items.map((item, i) => (i === idx ? { ...item, quantity } : item)),
+    }))
+  }
 
   function productLabel(productId: string) {
     const p = allProducts.find((x) => x.id === productId)
@@ -120,6 +145,11 @@ function ComboModal({ comercioId, editing, allProducts, onClose, onSaved }: Comb
     setSaving(true)
     setError(null)
     try {
+      const items = form.items.map((item) =>
+        item.type === "fixed"
+          ? { product_id: item.product_id, quantity: item.quantity, is_open: false as const }
+          : { open_category: item.open_category, quantity: item.quantity, is_open: true as const },
+      )
       const payload = {
         code: form.code,
         short_name: form.short_name,
@@ -127,7 +157,7 @@ function ComboModal({ comercioId, editing, allProducts, onClose, onSaved }: Comb
         description: form.description || undefined,
         price: Number(form.price),
         is_available: form.is_available,
-        items: form.items,
+        items,
       }
       if (editing) {
         await api.combos.editar(comercioId, editing.id, payload)
@@ -208,7 +238,7 @@ function ComboModal({ comercioId, editing, allProducts, onClose, onSaved }: Comb
                 value={form.price}
                 onChange={(e) => setField("price", e.target.value)}
                 required
-                placeholder="3500"
+                placeholder="50000"
                 className="w-full border border-border rounded-xl px-3 py-2 text-sm text-brown bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
               />
             </div>
@@ -245,22 +275,32 @@ function ComboModal({ comercioId, editing, allProducts, onClose, onSaved }: Comb
           <div>
             <label className="block text-sm font-medium text-brown mb-2">Productos incluidos</label>
 
+            {/* Lista de ítems actuales */}
             {form.items.length > 0 && (
               <div className="space-y-2 mb-3">
-                {form.items.map((item) => (
-                  <div key={item.product_id} className="flex items-center gap-2 bg-[#faf7f2] px-3 py-2 rounded-xl">
-                    <span className="flex-1 text-sm text-brown truncate">{productLabel(item.product_id)}</span>
+                {form.items.map((item, idx) => (
+                  <div key={itemKey(item, idx)} className="flex items-center gap-2 bg-[#faf7f2] px-3 py-2 rounded-xl">
+                    {item.type === "fixed" ? (
+                      <span className="flex-1 text-sm text-brown truncate">
+                        {productLabel(item.product_id)}
+                      </span>
+                    ) : (
+                      <span className="flex-1 text-sm text-brown flex items-center gap-1.5">
+                        <Shuffle className="w-3.5 h-3.5 text-brand flex-shrink-0" />
+                        <span className="italic">{CATEGORY_LABELS[item.open_category]} a elección</span>
+                      </span>
+                    )}
                     <input
                       type="number"
                       min={1}
                       value={item.quantity}
-                      onChange={(e) => updateQuantity(item.product_id, Number(e.target.value))}
+                      onChange={(e) => updateQuantity(idx, Number(e.target.value))}
                       className="w-14 border border-border rounded-lg px-2 py-1 text-sm text-center text-brown bg-white focus:outline-none focus:ring-1 focus:ring-brand/30"
                     />
                     <span className="text-xs text-brown-muted">un.</span>
                     <button
                       type="button"
-                      onClick={() => removeItem(item.product_id)}
+                      onClick={() => removeItem(idx)}
                       className="p-1 text-brown-muted hover:text-red-500 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -270,28 +310,85 @@ function ComboModal({ comercioId, editing, allProducts, onClose, onSaved }: Comb
               </div>
             )}
 
-            <div className="flex gap-2">
-              <select
-                value={selectedProductId}
-                onChange={(e) => setSelectedProductId(e.target.value)}
-                data-testid="select-agregar-producto"
-                className="flex-1 border border-border rounded-xl px-3 py-2 text-sm text-brown bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
-              >
-                <option value="">Seleccionar producto…</option>
-                {availableToAdd.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.code} — {p.short_name} ({CATEGORY_LABELS[p.category]})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={addItem}
-                disabled={!selectedProductId}
-                className="px-3 py-2 rounded-xl border border-brand text-brand text-sm font-medium hover:bg-brand-pale disabled:opacity-40 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+            {/* Selector para agregar ítem */}
+            <div className="border border-border rounded-xl p-3 space-y-2 bg-[#fafafa]">
+              {/* Toggle de tipo */}
+              <div className="flex gap-1 p-1 bg-[#f0ebe0] rounded-lg w-fit">
+                <button
+                  type="button"
+                  data-testid="tab-producto-fijo"
+                  onClick={() => setAddType("fixed")}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    addType === "fixed" ? "bg-white text-brown shadow-sm" : "text-brown-muted hover:text-brown"
+                  }`}
+                >
+                  Producto fijo
+                </button>
+                <button
+                  type="button"
+                  data-testid="tab-a-eleccion"
+                  onClick={() => setAddType("open")}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    addType === "open" ? "bg-white text-brown shadow-sm" : "text-brown-muted hover:text-brown"
+                  }`}
+                >
+                  A elección
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                {addType === "fixed" ? (
+                  <select
+                    value={selectedProductId}
+                    onChange={(e) => setSelectedProductId(e.target.value)}
+                    data-testid="select-agregar-producto"
+                    className="flex-1 border border-border rounded-xl px-3 py-2 text-sm text-brown bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  >
+                    <option value="">Seleccionar producto…</option>
+                    {availableToAdd.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} — {p.short_name} ({CATEGORY_LABELS[p.category]})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value as ProductCategory)}
+                    data-testid="select-categoria-abierta"
+                    className="flex-1 border border-border rounded-xl px-3 py-2 text-sm text-brown bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  >
+                    <option value="empanada">Empanada a elección</option>
+                    <option value="pizza">Pizza a elección</option>
+                    <option value="drink">Bebida a elección</option>
+                  </select>
+                )}
+
+                <input
+                  type="number"
+                  min={1}
+                  value={addQuantity}
+                  onChange={(e) => setAddQuantity(Number(e.target.value))}
+                  data-testid="input-cantidad-agregar"
+                  className="w-16 border border-border rounded-xl px-2 py-2 text-sm text-center text-brown bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+                />
+
+                <button
+                  type="button"
+                  onClick={addItem}
+                  disabled={addType === "fixed" && !selectedProductId}
+                  data-testid="btn-agregar-item"
+                  className="px-3 py-2 rounded-xl border border-brand text-brand text-sm font-medium hover:bg-brand-pale disabled:opacity-40 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {addType === "open" && (
+                <p className="text-xs text-brown-muted">
+                  El cliente puede elegir cualquier producto de esta categoría al hacer el pedido.
+                </p>
+              )}
             </div>
           </div>
 
@@ -493,14 +590,24 @@ export default function CombosPage() {
                       <span className="text-brown-muted italic text-xs">Sin productos</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {c.items.map((item) => (
-                          <span
-                            key={item.id}
-                            className="inline-block px-1.5 py-0.5 bg-[#f5f0e8] text-brown text-xs rounded-md"
-                          >
-                            {item.quantity}× {item.product?.short_name ?? item.product_id.slice(0, 6)}
-                          </span>
-                        ))}
+                        {c.items.map((item) =>
+                          item.is_open ? (
+                            <span
+                              key={item.id}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-pale text-brand text-xs rounded-md"
+                            >
+                              <Shuffle className="w-2.5 h-2.5" />
+                              {item.quantity}× {CATEGORY_LABELS[item.open_category ?? "empanada"]} elección
+                            </span>
+                          ) : (
+                            <span
+                              key={item.id}
+                              className="inline-block px-1.5 py-0.5 bg-[#f5f0e8] text-brown text-xs rounded-md"
+                            >
+                              {item.quantity}× {item.product?.short_name ?? item.product_id?.slice(0, 6)}
+                            </span>
+                          ),
+                        )}
                       </div>
                     )}
                   </td>

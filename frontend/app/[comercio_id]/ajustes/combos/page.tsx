@@ -431,14 +431,14 @@ export default function CombosPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brown-muted pointer-events-none" />
+        <div className="flex items-center gap-2 flex-1 min-w-[200px] border border-border rounded-xl bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-brand/30">
+          <Search className="w-4 h-4 text-brown-muted flex-shrink-0" />
           <input
             data-testid="input-buscar-combo"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código o nombre…"
-            className="w-full pl-9 pr-3 py-2 border border-border rounded-xl text-sm text-brown bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="flex-1 text-sm text-brown bg-transparent focus:outline-none"
           />
         </div>
         <select

@@ -14,6 +14,7 @@ from app.api.empleados import router as empleados_router
 from app.api.catalogo import router as catalogo_router
 from app.api.clientes import router as clientes_router
 from app.api.pedidos import router as pedidos_router
+from app.api.webhooks import router as webhooks_router
 
 
 @asynccontextmanager
@@ -39,3 +40,4 @@ app.include_router(empleados_router)
 app.include_router(catalogo_router)
 app.include_router(clientes_router)
 app.include_router(pedidos_router)
+app.include_router(webhooks_router)

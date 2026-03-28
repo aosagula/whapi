@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     secret_key: str = "changeme"
     access_token_expire_minutes: int = 60
 
+    # Webhooks
+    webhook_token: str = ""  # Token compartido para validar webhooks entrantes
+
     # WPPConnect
     wppconnect_host: str = ""
     wppconnect_port: int = 443

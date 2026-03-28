@@ -1,3 +1,61 @@
+// ---------------------------------------------------------------------------
+// Catálogo
+// ---------------------------------------------------------------------------
+
+export type ProductCategory = "pizza" | "empanada" | "drink";
+export type ProductSize = "large" | "small";
+
+export interface Product {
+  id: number;
+  pizzeria_id: number;
+  code: string;
+  short_name: string;
+  full_name: string;
+  description: string | null;
+  category: ProductCategory;
+  is_available: boolean;
+  created_at: string;
+}
+
+export interface CatalogItem {
+  id: number;
+  pizzeria_id: number;
+  product_id: number;
+  size: ProductSize | null;
+  price: number;
+  is_active: boolean;
+}
+
+export interface ComboItem {
+  id: number;
+  combo_id: number;
+  product_id: number;
+  quantity: number;
+}
+
+export interface Combo {
+  id: number;
+  pizzeria_id: number;
+  name: string;
+  description: string | null;
+  price: number;
+  is_available: boolean;
+  created_at: string;
+}
+
+export interface PizzeriaConfig {
+  id: number;
+  pizzeria_id: number;
+  half_half_surcharge: number;
+  welcome_message: string | null;
+  opening_time: string | null;
+  closing_time: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos
+// ---------------------------------------------------------------------------
+
 export type OrderStatus =
   | "in_progress"
   | "pending_payment"

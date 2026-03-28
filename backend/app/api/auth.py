@@ -9,7 +9,7 @@ from app.core.deps import ActivePizzeriaId, CurrentAccount, DBSession
 from app.core.security import hash_password, verify_password
 from app.models.account import Account, PanelUser, Pizzeria, PizzeriaRole, UserPizzeriaRole
 from app.schemas.account import AccountCreate, AccountRead, PizzeriaRead
-from app.schemas.auth import LoginRequest, PizzeriaSelectorResponse, TokenResponse
+from app.schemas.auth import LoginRequest, PanelLoginRequest, PizzeriaSelectorResponse, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -108,6 +108,46 @@ async def select_pizzeria(
         role=role,
     )
     return TokenResponse(access_token=token, pizzeria_id=pizzeria_id, role=role)
+
+
+@router.post("/panel-login", response_model=TokenResponse)
+async def panel_login(body: PanelLoginRequest, db: DBSession) -> TokenResponse:
+    """Login para empleados del panel (PanelUser). El token incluye pizzeria_id y rol fijo."""
+    result = await db.execute(
+        select(PanelUser).where(PanelUser.email == body.email, PanelUser.is_active.is_(True))
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None or not verify_password(body.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email o contrasena incorrectos",
+        )
+
+    # Buscar el rol del empleado en la pizzeria solicitada
+    role_result = await db.execute(
+        select(UserPizzeriaRole).where(
+            UserPizzeriaRole.user_id == user.id,
+            UserPizzeriaRole.pizzeria_id == body.pizzeria_id,
+        )
+    )
+    assignment = role_result.scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene acceso a esta pizzeria",
+        )
+
+    token = create_access_token(
+        account_id=user.account_id,
+        pizzeria_id=body.pizzeria_id,
+        role=assignment.role.value,
+    )
+    return TokenResponse(
+        access_token=token,
+        pizzeria_id=body.pizzeria_id,
+        role=assignment.role.value,
+    )
 
 
 @router.get("/me", response_model=AccountRead)

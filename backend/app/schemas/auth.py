@@ -21,6 +21,14 @@ class TokenResponse(BaseModel):
     role: str | None = None
 
 
+class PanelLoginRequest(BaseModel):
+    """Credenciales de login para empleados del panel."""
+
+    email: EmailStr
+    password: str
+    pizzeria_id: int
+
+
 class PizzeriaSelectorResponse(BaseModel):
     """Lista de pizzerías disponibles para seleccionar al iniciar sesión."""
 

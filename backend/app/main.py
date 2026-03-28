@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.core.db import engine
 from app.api.health import router as health_router
 from app.api.auth import router as auth_router
+from app.api.pizzerias import router as pizzerias_router
 
 
 @asynccontextmanager
@@ -29,3 +30,4 @@ app = FastAPI(
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(pizzerias_router)

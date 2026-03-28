@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     secret_key: str = "changeme"
     access_token_expire_minutes: int = 60
 
+    # CORS
+    cors_origins: str = "http://localhost:3000"  # separados por coma
+
     # Webhooks
     webhook_token: str = ""  # Token compartido para validar webhooks entrantes
 

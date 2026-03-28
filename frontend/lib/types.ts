@@ -53,6 +53,36 @@ export interface PizzeriaConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Conversaciones
+// ---------------------------------------------------------------------------
+
+export type ChatSessionStatus =
+  | "active"
+  | "waiting_human"
+  | "transferred_human"
+  | "closed";
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "operator";
+  content: string;
+}
+
+export interface ChatSessionDetail {
+  id: number;
+  pizzeria_id: number;
+  customer_id: number;
+  customer_phone: string;
+  customer_name: string | null;
+  whatsapp_number_id: number;
+  whatsapp_session_name: string;
+  status: ChatSessionStatus;
+  messages: ChatMessage[];
+  inactive_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Pedidos
 // ---------------------------------------------------------------------------
 

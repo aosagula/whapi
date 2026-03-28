@@ -23,7 +23,30 @@ class ChatSessionRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChatSessionDetail(BaseModel):
+    """Sesión con datos del cliente y número de WhatsApp (para el panel HITL)."""
+
+    id: int
+    pizzeria_id: int
+    customer_id: int
+    customer_phone: str
+    customer_name: str | None
+    whatsapp_number_id: int
+    whatsapp_session_name: str
+    status: ChatSessionStatus
+    messages: list[dict]          # lista de {role, content}
+    inactive_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatSessionStatusUpdate(BaseModel):
     """Cambio de estado de una sesión (ej: derivar a humano)."""
 
     status: ChatSessionStatus
+
+
+class SendMessageRequest(BaseModel):
+    """Mensaje que el operador envía al cliente vía WPPConnect."""
+
+    text: str

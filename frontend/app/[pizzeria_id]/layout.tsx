@@ -49,6 +49,7 @@ export default function PizzeriaLayout({
 
           <nav className="hidden sm:flex items-center gap-1 text-sm font-medium">
             <NavLink href={`/${pizzeriaId}/dashboard`}>Pedidos</NavLink>
+            <NavLink href={`/${pizzeriaId}/pedido-telefonico`}>+ Pedido</NavLink>
             <NavLink href={`/${pizzeriaId}/menu`}>Menú</NavLink>
             <NavLink href={`/${pizzeriaId}/clientes`}>Clientes</NavLink>
             <NavLink href={`/${pizzeriaId}/conversaciones`}>Conversaciones</NavLink>

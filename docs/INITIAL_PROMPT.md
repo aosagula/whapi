@@ -1,125 +1,151 @@
-# INITIAL_PROMPT — Plataforma de Chatbot de Pedidos para Pizzerías (Multi-Tenant)
+# INITIAL_PROMPT — Whapi: Plataforma SaaS de Chatbot de Pedidos para Comercios
 
 ## Contexto del proyecto
 
-Vas a construir una **plataforma SaaS multi-tenant** de gestión de pedidos para pizzerías.
-La especificación funcional completa está en `docs/especificacion-chatbot-pizzeria.md` (v1.8). **Leé ese archivo completo antes de hacer cualquier cosa.** Prestá especial atención a la sección 2.7 (Multi-tenancy, registro y múltiples WhatsApp).
+Vas a construir **Whapi**, una plataforma SaaS multi-tenant que permite a dueños de comercios gastronómicos gestionar pedidos recibidos por WhatsApp, con panel web para su equipo y chatbot conversacional con LLM.
 
-El archivo `CLAUDE.md` define el stack, las convenciones y el orden de implementación. Seguilo estrictamente.
+Leé estos dos archivos completos antes de hacer cualquier cosa:
+- `docs/especificacion-chatbot-pizzeria.md` — especificación funcional del sistema (v1.8)
+- `CLAUDE.md` — stack, convenciones, modelo de navegación, UX y orden de fases
 
 ---
 
-## Concepto clave — Multi-tenancy
+## Qué es Whapi
 
-El sistema atiende a múltiples pizzerías desde una misma plataforma. Un **Dueño** se registra, crea una o más pizzerías, y cada pizzería tiene su propio menú, empleados, clientes y números de WhatsApp. Los datos están completamente aislados entre pizzerías.
-
-```
-Cuenta (Dueño)
-  └── Pizzería A
-  │     ├── Números de WhatsApp (sesiones WPPConnect)
-  │     ├── Empleados (cajero, cocinero, repartidor, admin)
-  │     ├── Menú y catálogo propio
-  │     └── Pedidos y clientes propios
-  └── Pizzería B
-        └── ...
-```
-
-**Regla de oro**: todo query operativo filtra siempre por `pizzeria_id`. Sin excepciones.
+- Una **landing page pública** que muestra las características del producto para el dueño de un comercio.
+- Un **panel web** para que el equipo del comercio gestione pedidos en tiempo real.
+- Un **chatbot de WhatsApp** que toma pedidos con un LLM como motor conversacional.
+- Arquitectura **multi-tenant**: cada comercio es un tenant aislado.
 
 ---
 
 ## Infraestructura ya existente — NO tocar
 
-| Servicio              | Estado                                                        |
-|-----------------------|---------------------------------------------------------------|
-| **WPPConnect Server** | ✅ Corriendo. Gestiona múltiples sesiones (una por número de WhatsApp). Recibe y envía mensajes. |
-| **PostgreSQL**        | ✅ Instancia corriendo, sin schema. Alembic creará todo.      |
-| **n8n**               | ✅ Instalado, sin flujos. Los flujos se entregan como JSON importables (Fase 15). |
+| Servicio          | Estado       | Qué hacer                                                          |
+|-------------------|--------------|--------------------------------------------------------------------|
+| WPPConnect Server | ✅ Corriendo | Consumir su API. Gestiona múltiples sesiones WhatsApp.             |
+| PostgreSQL        | ✅ Corriendo | Instancia vacía. Alembic crea todo el schema.                      |
+| n8n               | ✅ Instalado | Sin flujos. Se entregan en Fase 11 como JSON importables.          |
 
 ---
 
-## Lo que hay que construir
+## Modelo de usuarios (leer con atención)
 
-1. **Backend (FastAPI)** — API REST multi-tenant + webhooks para WPPConnect y MercadoPago
-2. **Frontend (Next.js)** — Panel web con registro, selector de pizzería y panel operativo
-3. **Flujos de n8n** — JSON importables (chatbot, notificaciones, timer de inactividad)
-4. **Schema de base de datos** — Vía migraciones Alembic
+### Registro bifurcado
+El registro distingue dos tipos de usuario:
+
+**Dueño de comercio**
+1. Completa sus datos de cuenta
+2. Obligatoriamente da de alta su primer comercio (nombre, dirección, logo)
+3. Opcionalmente conecta un número de WhatsApp (puede hacerlo después)
+4. Queda automáticamente asociado al comercio con rol `dueño`
+
+**Empleado / colaborador**
+1. Solo completa sus datos de cuenta
+2. No crea comercio. Accede cuando un Dueño lo asocie a un comercio con un rol.
+
+### Post-login
+Después de autenticarse, el sistema muestra los comercios a los que el usuario está asociado.
+Si no tiene ninguno → mensaje informativo, sin acceso al panel.
+Si tiene uno → entra directamente.
+Si tiene más de uno → selector para elegir con cuál operar.
 
 ---
 
-## Tu primera tarea — Fase 0: Scaffold del proyecto
+## Navegación del panel (implementar exactamente así)
 
-**Antes de escribir código, presentá el siguiente plan:**
+### Sidebar izquierdo colapsable
+- **Expandido**: icono + nombre de cada ítem
+- **Minimizado**: solo iconos; hover → tooltip con el nombre
 
-1. **Árbol de directorios** completo del proyecto
-2. **docker-compose.yml** — solo `backend` y `frontend` (PostgreSQL, WPPConnect y n8n ya corren en el entorno)
-3. **Lista de archivos** que vas a crear en la Fase 0
-4. **Preguntas** si algo de la spec es ambiguo antes de arrancar
+**Estructura del menú:**
+```
+📦  Pedidos
+📞  Pedidos manuales
+👥  Clientes
+⚙️  Ajustes
+    ├── 🔐  Permisos
+    ├── 👤  Empleados
+    ├── 🍕  Productos
+    └── 🎁  Combos
+📊  Reportes
+    └── [reportes del comercio activo]
+```
 
-### Criterio de éxito para la Fase 0
+**Usuario autenticado — esquina inferior izquierda del sidebar:**
+- Expandido: avatar + nombre completo
+- Minimizado: solo avatar
+- Al hacer clic → menú con: "Editar perfil" y "Cerrar sesión"
 
-- `docker compose up` levanta backend y frontend sin errores
+---
+
+## Tu primera tarea — Fase 0: Fundación
+
+### Antes de escribir código, presentá:
+
+1. **Árbol de directorios** completo del proyecto (`whapi/`)
+2. **docker-compose.yml** — solo `backend` y `frontend`
+3. **Schema completo de la base de datos**: todas las tablas, columnas, tipos, FKs y constraints. El schema va completo en la Fase 0 porque modificarlo después de tener migraciones es costoso.
+4. **Lista de archivos** que vas a crear
+5. **Preguntas** si algo es ambiguo
+
+### Criterio de éxito — Fase 0
+
+- `docker compose up` sin errores
 - `GET http://localhost:8000/health` → `{"status": "ok"}`
-- `GET http://localhost:3000` → página de login/registro vacía pero funcional
-- FastAPI conecta a PostgreSQL sin error (verificar en el startup log)
-- `.env.example` documenta todas las variables necesarias
+- `GET http://localhost:3000` → landing page de Whapi visible
+- FastAPI conecta a PostgreSQL sin error
+- Todas las migraciones Alembic corren sin error
+- `.env.example` con todas las variables documentadas
 
-### Al terminar la Fase 0
+### Checkpoint de la Fase 0
 
-1. `git add -A && git commit -m "Fase 0: scaffold inicial del proyecto"`
-2. Mostrá el resumen de lo creado
-3. **Esperá mi confirmación** antes de avanzar a la Fase 1 (schema de DB)
-
----
-
-## Reglas de trabajo
-
-- **Planificá antes de implementar**: mostrá el plan, esperá aprobación, ejecutá
-- **Commit antes de cambios grandes**: schema, refactors, inicio de módulo nuevo
-- **Un módulo a la vez**
-- **Consultá la spec ante cualquier duda de negocio**
-- **Nunca hardcodear valores**: todo por `.env`
+Antes del commit, verificá que el schema cubre:
+- [ ] Tablas de cuenta: `usuario`, `comercio`, `usuario_comercio` (asociación con rol)
+- [ ] Tablas de catálogo: `producto`, `catalogo_item`, `combo`, `combo_item`
+- [ ] Tablas operativas: `cliente`, `pedido`, `item_pedido`, `pago`, `incidencia`, `sesion_conversacion`, `credito`
+- [ ] Tabla de WhatsApp: `telefono_whatsapp` (sesión WPPConnect por número)
+- [ ] Todas las tablas operativas tienen `comercio_id` como FK no nula
+- [ ] Soft delete donde corresponde (`disponible`, `activo`, `eliminado_en`)
+- [ ] Timestamps en UTC en todas las tablas
+- [ ] El schema cubre los estados de pedido de la spec (sección 6)
 
 ---
 
-## Referencia rápida — Entidades del dominio
+## Protocolo de Checkpoint — aplicar al final de CADA fase
 
-### Nivel de cuenta (cross-tenant)
-| Entidad         | Descripción                                                    |
-|-----------------|----------------------------------------------------------------|
-| `Cuenta`        | Datos del Dueño: email, contraseña, nombre, teléfono          |
-| `Pizzeria`      | Tenant principal. Nombre, dirección, logo. Pertenece a Cuenta. |
-| `UsuarioCuenta` | Empleado del panel. Puede tener roles en múltiples pizzerías.  |
-| `RolPizzeria`   | Asignación de rol de un usuario a una pizzería específica.     |
+1. Releé las secciones de la spec y de `CLAUDE.md` que corresponden a la fase
+2. Generá el checklist con funcionalidades, reglas de negocio, comportamientos de UI y casos borde
+3. Verificá el código: ✅ implementado / ❌ faltante / ⚠️ incompleto
+4. Corregí todos los ❌ y ⚠️
+5. Mostrá el checklist con todos en ✅
+6. `git add -A && git commit -m "Fase N completa: [nombre] — checkpoint ✅"`
+7. Esperá mi confirmación antes de avanzar
 
-### Nivel de pizzería (siempre filtrar por `pizzeria_id`)
-| Entidad              | Descripción                                                  |
-|----------------------|--------------------------------------------------------------|
-| `NumeroWhatsApp`     | Sesión WPPConnect de esa pizzería. Estado: conectado / desconectado. |
-| `Producto`           | Inventario base: Pizza / Empanada / Bebida                   |
-| `CatalogoItem`       | Precio y variantes de cada producto en esa pizzería          |
-| `Combo`              | Agrupa productos con precio especial                         |
-| `Cliente`            | Identificado por teléfono, scoped a la pizzería              |
-| `Credito`            | Saldo a favor del cliente en esa pizzería                    |
-| `Pedido`             | Origen: `whatsapp` / `telefonico` / `operador`               |
-| `ItemPedido`         | Líneas del pedido                                            |
-| `Pago`               | Estado de pago independiente                                 |
-| `Incidencia`         | Problema durante o después del delivery                      |
-| `SesionConversacion` | Estado del chat WhatsApp (incluye `numero_whatsapp_id`)      |
+---
 
-### Roles
-`dueno` (nivel cuenta) › `admin` › `cajero` › `cocinero` › `repartidor` (todos nivel pizzería)
+## Secuencia de fases
 
-### Estados de pedido
-```
-pedido_en_curso → pendiente_pago → pendiente_preparacion
-    → en_preparacion → a_despacho → en_delivery → entregado
-Desvíos: cancelado | con_incidencia | descartado
-```
+| Fase | Qué construye                              | Lo que se ve en el navegador                        |
+|------|--------------------------------------------|-----------------------------------------------------|
+| 0    | Scaffold + schema completo de DB           | Landing page básica, FastAPI conecta a DB           |
+| 1    | Landing + auth + registro + selector       | Registro bifurcado, login, selector de comercios    |
+| 2    | Alta de comercio + empleados + roles       | El Dueño crea su comercio y agrega empleados        |
+| 3    | Sidebar colapsable + layout del panel      | Navegación completa con todos los ítems del menú    |
+| 4    | Catálogo: productos y combos               | ABM de menú completo desde ajustes                  |
+| 5    | Tablero de pedidos (Kanban)                | Gestión de pedidos por estados según rol            |
+| 6    | Pedidos manuales (telefónicos)             | Formulario de carga de pedido por teléfono          |
+| 7    | Clientes y créditos                        | Listado de clientes con historial y saldo           |
+| 8    | Conversaciones activas (HITL)              | El cajero atiende derivaciones de WhatsApp          |
+| 9    | Gestión de números de WhatsApp             | El Dueño vincula números WhatsApp al comercio       |
+| 10   | Webhooks + pagos + notificaciones          | Pedidos llegan automáticamente desde WhatsApp       |
+| 11   | Flujos de n8n                              | El chatbot responde clientes en WhatsApp            |
+| 12   | Reportes                                   | Métricas y reportes por comercio                    |
 
 ---
 
 ## Comienza ahora
 
-Leé `docs/especificacion-chatbot-pizzeria.md` (v1.8) y `CLAUDE.md` completamente.
-Luego presentá el plan detallado para la Fase 0. No escribas código hasta que yo apruebe el plan.
+Leé `docs/especificacion-chatbot-pizzeria.md` y `CLAUDE.md` completamente.
+Presentá el plan para la Fase 0 (árbol de directorios + schema de DB + lista de archivos).
+**No escribas código hasta que yo apruebe el plan.**

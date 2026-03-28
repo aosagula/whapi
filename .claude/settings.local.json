@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(ls -la /c/prg/whapi/.*)",
-      "Bash(git add:*)"
-    ]
-  }
-}

@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whapi — Pedidos por WhatsApp</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream:#fdf6ee; --white:#fff; --orange:#e85d04; --orange-l:#fb923c;
+  --orange-pale:#fff0e6; --brown:#1c1208; --brown-mid:#6b3f1a;
+  --muted:#9c7c6b; --border:#e8d5c4; --sidebar-bg:#1c1208;
+}
+*{box-sizing:border-box}
+body{background:var(--cream);color:var(--brown);font-family:'DM Sans',sans-serif}
+h1,h2,h3,.serif{font-family:'Fraunces',serif}
+.view{display:none}.view.active{display:block}
+.dash-wrap{display:none;height:100vh;overflow:hidden}.dash-wrap.active{display:flex}
+.panel{display:none}.panel.active{display:flex;flex-direction:column;flex:1;overflow:hidden}
+
+/* Warm hero */
+.warm-bg{background:linear-gradient(160deg,#fff8f0 0%,#ffe8d2 100%);position:relative;overflow:hidden}
+.warm-bg::before{content:'';position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(232,93,4,.12) 0%,transparent 70%);top:-100px;right:-100px;pointer-events:none}
+
+/* Buttons */
+.btn-p{background:var(--orange);color:#fff;font-weight:700;padding:11px 26px;border-radius:100px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;transition:all .2s}
+.btn-p:hover{background:#c94e03;transform:translateY(-1px);box-shadow:0 8px 24px rgba(232,93,4,.28)}
+.btn-o{background:transparent;color:var(--brown);border:2px solid var(--border);padding:9px 22px;border-radius:100px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;transition:all .2s}
+.btn-o:hover{border-color:var(--orange);color:var(--orange)}
+.btn-sm{padding:7px 16px;font-size:13px}
+.card{background:#fff;border-radius:20px;border:1px solid var(--border)}
+
+/* Sidebar */
+#sidebar{width:240px;min-width:240px;background:var(--sidebar-bg);display:flex;flex-direction:column;overflow:hidden;transition:all .25s cubic-bezier(.4,0,.2,1);position:relative;flex-shrink:0}
+#sidebar.collapsed{width:64px;min-width:64px}
+.slabel{transition:opacity .18s,width .18s;white-space:nowrap;overflow:hidden}
+#sidebar.collapsed .slabel{opacity:0;width:0;pointer-events:none}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;cursor:pointer;margin:1px 8px;color:rgba(255,255,255,.5);font-size:14px;font-weight:500;transition:all .15s;position:relative}
+.nav-item:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.9)}
+.nav-item.active{background:rgba(232,93,4,.2);color:#fb923c}
+.nav-item .icon{min-width:20px;text-align:center;font-size:16px}
+#sidebar.collapsed .nav-tip{display:block}
+.nav-tip{display:none;position:absolute;left:72px;background:#3d2000;color:#fff;font-size:12px;padding:5px 10px;border-radius:8px;white-space:nowrap;z-index:100;pointer-events:none;border:1px solid rgba(255,255,255,.1)}
+.submenu{overflow:hidden;transition:max-height .25s}
+.submenu.closed{max-height:0}.submenu.open{max-height:220px}
+.sub-item{display:flex;align-items:center;gap:10px;padding:8px 14px 8px 44px;border-radius:8px;cursor:pointer;margin:1px 8px;font-size:13px;color:rgba(255,255,255,.4);transition:all .15s}
+.sub-item:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.8)}
+.sub-item.active{color:#fb923c}
+#sidebar.collapsed .submenu{max-height:0!important}
+#sidebar.collapsed .sub-item{display:none}
+#sidebar.collapsed .chev{display:none}
+#toggle-sb{position:absolute;top:16px;right:-14px;width:28px;height:28px;background:var(--sidebar-bg);border:1px solid rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:rgba(255,255,255,.4);font-size:12px;transition:all .2s}
+#toggle-sb:hover{border-color:var(--orange-l);color:var(--orange-l)}
+#user-dd{display:none;position:absolute;bottom:68px;left:8px;right:8px;background:#2d1a05;border:1px solid rgba(255,255,255,.1);border-radius:12px;z-index:50;overflow:hidden;box-shadow:0 -8px 32px rgba(0,0,0,.5)}
+#user-dd.open{display:block}
+
+/* Forms */
+.fi{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;width:100%;color:var(--brown);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border .2s}
+.fi:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(232,93,4,.1)}
+.fi::placeholder{color:#c4a896}
+select.fi{cursor:pointer}
+.lbl{display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--brown)}
+
+/* Kanban */
+.kcol{min-width:220px;max-width:220px}
+.kcard{background:#fff;border:1px solid var(--border);border-radius:14px;padding:13px;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.kcard:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(28,18,8,.1)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.b-orange{background:#fff0e6;color:#e85d04}.b-yellow{background:#fef9c3;color:#a16207}
+.b-green{background:#dcfce7;color:#166534}.b-blue{background:#dbeafe;color:#1d4ed8}
+.b-purple{background:#f3e8ff;color:#7e22ce}.b-gray{background:#f1f5f9;color:#64748b}
+.b-red{background:#fee2e2;color:#dc2626}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:10px 16px;border-bottom:1px solid var(--border);background:#fdf6ee}
+.tbl td{padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px;color:var(--brown)}
+.tbl tr:hover td{background:#fdf6ee}
+
+/* Step dots */
+.sdot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--border);color:var(--muted)}
+.sdot.done{background:var(--orange);border-color:var(--orange);color:#fff}
+.sdot.cur{border-color:var(--orange);color:var(--orange)}
+.sline{flex:1;height:1px;background:var(--border)}.sline.done{background:var(--orange)}
+
+/* Type card (registro) */
+.tcard{border:2px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;background:#fff;transition:all .2s}
+.tcard:hover{border-color:#fb923c;box-shadow:0 4px 16px rgba(232,93,4,.12)}
+.tcard.sel{border-color:var(--orange);background:var(--orange-pale)}
+
+/* Comercio selector card */
+.com-card{background:#fff;border:1.5px solid var(--border);border-radius:18px;padding:20px 24px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:space-between}
+.com-card:hover{border-color:var(--orange);box-shadow:0 4px 20px rgba(232,93,4,.12);transform:translateY(-1px)}
+
+/* Drawer overlay */
+#drawer-overlay{display:none;position:fixed;inset:0;background:rgba(28,18,8,.35);z-index:200}
+#drawer-overlay.open{display:block}
+#drawer{position:fixed;right:-480px;top:0;bottom:0;width:480px;background:#fff;z-index:201;transition:right .3s cubic-bezier(.4,0,.2,1);overflow-y:auto;box-shadow:-8px 0 40px rgba(28,18,8,.12)}
+#drawer.open{right:0}
+
+/* Modal */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(28,18,8,.4);z-index:300;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+#modal{background:#fff;border-radius:24px;padding:32px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#f8f0e8}
+::-webkit-scrollbar-thumb{background:#d6b99a;border-radius:2px}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.fu{animation:fadeUp .38s ease both}
+.fu2{animation:fadeUp .38s .07s ease both}
+.fu3{animation:fadeUp .38s .14s ease both}
+.fu4{animation:fadeUp .38s .21s ease both}
+
+/* Topbar title area (swappable) */
+#tb-title{font-family:'Fraunces',serif;font-size:15px;font-weight:700;color:var(--brown)}
+#tb-sub{font-size:12px;color:var(--muted);margin-top:1px}
+</style>
+</head>
+<body>
+
+<!-- ══════════ LANDING ══════════ -->
+<div id="view-landing" class="view active warm-bg min-h-screen">
+  <nav class="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b" style="background:rgba(253,246,238,.92);backdrop-filter:blur(12px);border-color:var(--border)">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:var(--orange)">
+        <span class="text-white font-black text-base serif">W</span>
+      </div>
+      <span class="font-bold text-lg serif" style="color:var(--brown)">Whapi</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="btn-o text-sm" onclick="show('login')">Iniciar sesión</button>
+      <button class="btn-p text-sm" onclick="show('registro')">Registrarme gratis</button>
+    </div>
+  </nav>
+
+  <section class="max-w-5xl mx-auto px-8 pt-20 pb-16 relative z-10">
+    <div class="fu inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-7 border" style="background:rgba(232,93,4,.1);color:var(--orange);border-color:rgba(232,93,4,.2)">🍕 Hecho para pizzerías y comercios gastronómicos</div>
+    <h1 class="fu2 font-black text-6xl leading-tight mb-6 serif" style="color:var(--brown)">
+      Tus clientes piden<br>por WhatsApp.<br>
+      <em style="color:var(--orange)">Whapi lo gestiona todo.</em>
+    </h1>
+    <p class="fu3 text-xl mb-10 max-w-xl leading-relaxed" style="color:var(--brown-mid)">Un chatbot con IA toma los pedidos, y tu equipo los gestiona desde un panel simple. Sin apps nuevas para tus clientes.</p>
+    <div class="fu4 flex items-center gap-3 flex-wrap">
+      <button class="btn-p text-base px-10 py-3.5" onclick="show('registro')">Empezar ahora — es gratis →</button>
+      <button class="btn-o text-base" onclick="show('dashboard')">Ver el panel de ejemplo</button>
+    </div>
+    <div class="fu4 flex gap-4 mt-14 flex-wrap">
+      <div class="card px-5 py-3.5 flex items-center gap-3"><span class="text-2xl">🤖</span><div><div class="text-sm font-semibold" style="color:var(--brown)">Bot con IA</div><div class="text-xs" style="color:var(--muted)">Responde 24/7</div></div></div>
+      <div class="card px-5 py-3.5 flex items-center gap-3"><span class="text-2xl">📊</span><div><div class="text-sm font-semibold" style="color:var(--brown)">Panel en vivo</div><div class="text-xs" style="color:var(--muted)">Cocina + caja + delivery</div></div></div>
+      <div class="card px-5 py-3.5 flex items-center gap-3"><span class="text-2xl">💳</span><div><div class="text-sm font-semibold" style="color:var(--brown)">Cobros automáticos</div><div class="text-xs" style="color:var(--muted)">MercadoPago integrado</div></div></div>
+      <div class="card px-5 py-3.5 flex items-center gap-3"><span class="text-2xl">🏪</span><div><div class="text-sm font-semibold" style="color:var(--brown)">Multi-sucursal</div><div class="text-xs" style="color:var(--muted)">Todos tus comercios</div></div></div>
+    </div>
+  </section>
+
+  <section style="background:#fff;border-top:1px solid var(--border);border-bottom:1px solid var(--border)" class="py-16">
+    <div class="max-w-5xl mx-auto px-8">
+      <div class="text-center mb-12"><h2 class="text-4xl font-black mb-2 serif" style="color:var(--brown)">¿Qué hace Whapi por tu comercio?</h2><p class="text-lg" style="color:var(--muted)">Todo lo que necesitás, nada de lo que no.</p></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="p-7 rounded-2xl" style="background:var(--cream);border:1px solid var(--border)"><div class="text-3xl mb-4">💬</div><h3 class="text-xl font-bold mb-2 serif" style="color:var(--brown)">Chatbot que entiende cómo habla tu cliente</h3><p style="color:var(--muted);font-size:14px;line-height:1.7">"Dame una mozza grande y seis empanadas de carne" — el bot lo entiende, confirma el pedido y genera el cobro. Sin menús numerados ni fricción.</p></div>
+        <div class="p-7 rounded-2xl" style="background:var(--cream);border:1px solid var(--border)"><div class="text-3xl mb-4">🍳</div><h3 class="text-xl font-bold mb-2 serif" style="color:var(--brown)">Panel para cada rol de tu equipo</h3><p style="color:var(--muted);font-size:14px;line-height:1.7">El cocinero ve los pedidos a preparar. El repartidor ve las entregas. La cajera ve los pagos. Cada uno ve exactamente lo que necesita.</p></div>
+        <div class="p-7 rounded-2xl" style="background:var(--cream);border:1px solid var(--border)"><div class="text-3xl mb-4">🔔</div><h3 class="text-xl font-bold mb-2 serif" style="color:var(--brown)">Notificaciones automáticas al cliente</h3><p style="color:var(--muted);font-size:14px;line-height:1.7">Desde "tu pedido está en preparación" hasta "el repartidor está en camino". El cliente siempre sabe qué está pasando.</p></div>
+        <div class="p-7 rounded-2xl" style="background:var(--orange-pale);border:1px solid rgba(232,93,4,.2)"><div class="text-3xl mb-4">❤️</div><h3 class="text-xl font-bold mb-2 serif" style="color:var(--brown)">Fidelizá con créditos automáticos</h3><p style="color:var(--brown-mid);font-size:14px;line-height:1.7">Cancelaciones con crédito a favor que se aplican solos en el próximo pedido. El cliente vuelve y vos no perdés el pago.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pb-16 px-8 pt-16">
+    <div class="max-w-2xl mx-auto p-12 rounded-3xl text-center" style="background:var(--brown)">
+      <h2 class="text-4xl font-black text-white mb-3 serif">¿Cuándo empezamos?</h2>
+      <p class="mb-8" style="color:rgba(255,255,255,.6)">30 días gratis. Sin tarjeta. Sin letra chica.</p>
+      <button class="btn-p text-base px-10 py-3.5" onclick="show('registro')" style="background:var(--orange-l)">Registrar mi pizzería →</button>
+    </div>
+  </section>
+  <footer class="text-center pb-8 text-sm" style="color:var(--muted)">© 2025 Whapi · Todos los derechos reservados</footer>
+</div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="view-login" class="view min-h-screen flex items-center justify-center px-4" style="background:var(--cream)">
+  <div class="w-full max-w-sm fu">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center gap-2 mb-5 cursor-pointer" onclick="show('landing')">
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:var(--orange)"><span class="text-white font-black text-sm serif">W</span></div>
+        <span class="font-bold text-lg serif" style="color:var(--brown)">Whapi</span>
+      </div>
+      <h1 class="text-2xl font-black mb-1 serif" style="color:var(--brown)">Bienvenido de vuelta</h1>
+      <p class="text-sm" style="color:var(--muted)">Ingresá con tu email y contraseña</p>
+    </div>
+    <div class="card p-8">
+      <div class="space-y-4">
+        <div><label class="lbl">Email</label><input type="email" class="fi" placeholder="tu@email.com"></div>
+        <div>
+          <div class="flex justify-between mb-1.5"><label class="lbl" style="margin:0">Contraseña</label><span class="text-xs cursor-pointer" style="color:var(--orange)">¿Olvidaste tu contraseña?</span></div>
+          <input type="password" class="fi" placeholder="••••••••">
+        </div>
+        <button class="btn-p w-full mt-1" onclick="show('selector')">Ingresar al panel</button>
+      </div>
+      <p class="text-center text-sm mt-5" style="color:var(--muted)">¿No tenés cuenta? <span class="font-semibold cursor-pointer" style="color:var(--orange)" onclick="show('registro')">Registrarte gratis</span></p>
+    </div>
+    <p class="text-center text-xs mt-4 cursor-pointer" style="color:var(--muted)" onclick="show('landing')">← Volver al inicio</p>
+  </div>
+</div>
+
+<!-- ══════════ REGISTRO ══════════ -->
+<div id="view-registro" class="view min-h-screen flex items-center justify-center px-4 py-10" style="background:var(--cream)">
+  <div class="w-full max-w-md fu">
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center gap-2 mb-5 cursor-pointer" onclick="show('landing')">
+        <div class="w-7 h-7 rounded-xl flex items-center justify-center" style="background:var(--orange)"><span class="text-white font-black text-xs">W</span></div>
+        <span class="font-bold text-base serif" style="color:var(--brown)">Whapi</span>
+      </div>
+      <h1 class="text-2xl font-black serif" style="color:var(--brown)">Crear cuenta</h1>
+    </div>
+    <div class="flex items-center mb-7 px-2">
+      <div id="s1" class="sdot cur">1</div><div id="l12" class="sline"></div>
+      <div id="s2" class="sdot">2</div><div id="l23" class="sline"></div>
+      <div id="s3" class="sdot">3</div>
+    </div>
+    <div id="rs1" class="card p-7">
+      <h2 class="text-xl font-bold mb-1 serif" style="color:var(--brown)">¿Cómo vas a usar Whapi?</h2>
+      <p class="text-sm mb-5" style="color:var(--muted)">Elegí tu tipo de cuenta para continuar</p>
+      <div class="space-y-3">
+        <div id="td" class="tcard sel" onclick="selType('d')"><div class="flex items-start gap-3"><span class="text-2xl">🏪</span><div><div class="font-bold text-sm" style="color:var(--brown)">Soy dueño de un comercio</div><div class="text-xs mt-0.5" style="color:var(--muted)">Registrá tu pizzería, cargá el menú y empezá a recibir pedidos.</div></div></div></div>
+        <div id="te" class="tcard" onclick="selType('e')"><div class="flex items-start gap-3"><span class="text-2xl">👷</span><div><div class="font-bold text-sm" style="color:var(--brown)">Soy empleado / colaborador</div><div class="text-xs mt-0.5" style="color:var(--muted)">Creá tu cuenta y el dueño te va a dar acceso a su comercio.</div></div></div></div>
+      </div>
+      <button class="btn-p w-full mt-5" onclick="rStep(2)">Continuar →</button>
+    </div>
+    <div id="rs2" class="hidden card p-7">
+      <h2 class="text-xl font-bold mb-5 serif" style="color:var(--brown)">Tus datos personales</h2>
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Nombre</label><input class="fi" placeholder="Juan"></div>
+          <div><label class="lbl">Apellido</label><input class="fi" placeholder="García"></div>
+        </div>
+        <div><label class="lbl">Email</label><input type="email" class="fi" placeholder="juan@email.com"></div>
+        <div><label class="lbl">Contraseña</label><input type="password" class="fi" placeholder="Mínimo 8 caracteres"></div>
+        <div><label class="lbl">Teléfono</label><input class="fi" placeholder="+54 11 0000-0000"></div>
+      </div>
+      <div class="flex gap-3 mt-5"><button class="btn-o flex-1" onclick="rStep(1)">← Atrás</button><button class="btn-p flex-1" onclick="rStep(3)">Continuar →</button></div>
+    </div>
+    <div id="rs3" class="hidden card p-7">
+      <h2 class="text-xl font-bold mb-1 serif" id="r3t" style="color:var(--brown)">Tu primer comercio</h2>
+      <p class="text-sm mb-5" id="r3s" style="color:var(--muted)">Podés agregar más sucursales después.</p>
+      <div id="r3f" class="space-y-3">
+        <div><label class="lbl">Nombre del comercio</label><input class="fi" placeholder="Pizzería Don Juan"></div>
+        <div><label class="lbl">Dirección</label><input class="fi" placeholder="Av. Siempre Viva 742"></div>
+        <div><label class="lbl">Ciudad / Localidad</label><input class="fi" placeholder="Buenos Aires"></div>
+      </div>
+      <div class="flex gap-3 mt-5"><button class="btn-o flex-1" onclick="rStep(2)">← Atrás</button><button class="btn-p flex-1" onclick="show('selector')">Crear cuenta ✓</button></div>
+    </div>
+    <p class="text-center text-sm mt-4" style="color:var(--muted)">¿Ya tenés cuenta? <span class="font-semibold cursor-pointer" style="color:var(--orange)" onclick="show('login')">Iniciar sesión</span></p>
+  </div>
+</div>
+
+<!-- ══════════ SELECTOR DE COMERCIOS ══════════ -->
+<div id="view-selector" class="view min-h-screen flex items-center justify-center px-4" style="background:var(--cream)">
+  <div class="w-full max-w-lg fu">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center gap-2 mb-5">
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:var(--orange)"><span class="text-white font-black text-sm serif">W</span></div>
+        <span class="font-bold text-lg serif" style="color:var(--brown)">Whapi</span>
+      </div>
+      <h1 class="text-2xl font-black serif" style="color:var(--brown)">¿A qué comercio querés acceder?</h1>
+      <p class="text-sm mt-1" style="color:var(--muted)">Hola Juan, seleccioná tu comercio para continuar</p>
+    </div>
+    <div class="space-y-3">
+      <div class="com-card" onclick="show('dashboard')">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style="background:var(--orange-pale)">🍕</div>
+          <div>
+            <div class="font-bold text-base" style="color:var(--brown)">Pizzería Centro</div>
+            <div class="text-xs mt-0.5" style="color:var(--muted)">Av. Corrientes 1500, CABA</div>
+            <div class="flex gap-2 mt-1.5">
+              <span class="badge b-orange">4 pedidos activos</span>
+              <span class="badge b-green">🟢 WhatsApp activo</span>
+            </div>
+          </div>
+        </div>
+        <span style="color:var(--muted);font-size:20px">›</span>
+      </div>
+      <div class="com-card" onclick="show('dashboard')">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style="background:#f0fdf4">🍕</div>
+          <div>
+            <div class="font-bold text-base" style="color:var(--brown)">Pizzería Norte</div>
+            <div class="text-xs mt-0.5" style="color:var(--muted)">Av. Cabildo 2800, Núñez</div>
+            <div class="flex gap-2 mt-1.5">
+              <span class="badge b-gray">1 pedido activo</span>
+              <span class="badge b-green">🟢 WhatsApp activo</span>
+            </div>
+          </div>
+        </div>
+        <span style="color:var(--muted);font-size:20px">›</span>
+      </div>
+      <div class="com-card" onclick="show('dashboard')" style="opacity:.7">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style="background:#fef2f2">🍕</div>
+          <div>
+            <div class="font-bold text-base" style="color:var(--brown)">Pizzería Sur</div>
+            <div class="text-xs mt-0.5" style="color:var(--muted)">Av. San Juan 3400, Boedo</div>
+            <div class="flex gap-2 mt-1.5">
+              <span class="badge b-gray">Sin pedidos activos</span>
+              <span class="badge b-red">🔴 WhatsApp desconectado</span>
+            </div>
+          </div>
+        </div>
+        <span style="color:var(--muted);font-size:20px">›</span>
+      </div>
+    </div>
+    <button class="btn-o w-full mt-4 text-sm" style="border-style:dashed">+ Agregar nuevo comercio</button>
+    <p class="text-center text-xs mt-5 cursor-pointer" style="color:var(--muted)" onclick="show('landing')">← Cerrar sesión</p>
+  </div>
+</div>
+
+<!-- ══════════ DASHBOARD SHELL ══════════ -->
+<div id="view-dashboard" class="dash-wrap">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="toggle-sb" onclick="toggleSB()">◀</div>
+    <div class="flex items-center gap-2.5 px-4 py-5 mb-1">
+      <div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center" style="background:var(--orange)"><span class="text-white font-black text-sm serif">W</span></div>
+      <span class="font-bold text-base text-white slabel serif">Whapi</span>
+    </div>
+    <div class="mx-3 mb-3 px-3 py-2.5 rounded-xl cursor-pointer border border-white/10" style="background:rgba(255,255,255,.07);position:relative" onclick="show('selector')">
+      <div class="flex items-center gap-2">
+        <span class="text-base flex-shrink-0">🍕</span>
+        <div class="slabel overflow-hidden">
+          <div class="text-xs font-semibold text-white truncate">Pizzería Centro</div>
+          <div class="text-xs" style="color:rgba(255,255,255,.4)">4 pedidos activos</div>
+        </div>
+        <span class="slabel ml-auto text-xs" style="color:rgba(255,255,255,.35)">▾</span>
+      </div>
+      <div class="nav-tip" style="top:8px">Pizzería Centro</div>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-1">
+      <div id="nav-pedidos" class="nav-item active" onclick="goPanel('pedidos',this)">
+        <span class="icon">📦</span><span class="slabel">Pedidos</span><div class="nav-tip">Pedidos</div>
+      </div>
+      <div id="nav-manuales" class="nav-item" onclick="goPanel('manuales',this)">
+        <span class="icon">📞</span><span class="slabel">Pedidos manuales</span><div class="nav-tip">Pedidos manuales</div>
+      </div>
+      <div id="nav-clientes" class="nav-item" onclick="goPanel('clientes',this)">
+        <span class="icon">👥</span><span class="slabel">Clientes</span><div class="nav-tip">Clientes</div>
+      </div>
+      <div class="nav-item" onclick="toggleMenu('aj')">
+        <span class="icon">⚙️</span><span class="slabel flex-1">Ajustes</span>
+        <span class="slabel chev text-xs" style="color:rgba(255,255,255,.3)" id="chev-aj">▾</span>
+        <div class="nav-tip">Ajustes</div>
+      </div>
+      <div id="sub-aj" class="submenu closed">
+        <div class="sub-item" onclick="goPanel('permisos',this)"><span>🔐</span><span class="slabel">Permisos</span></div>
+        <div class="sub-item" onclick="goPanel('empleados',this)"><span>👤</span><span class="slabel">Empleados</span></div>
+        <div class="sub-item" onclick="goPanel('productos',this)"><span>🍕</span><span class="slabel">Productos</span></div>
+        <div class="sub-item" onclick="goPanel('combos',this)"><span>🎁</span><span class="slabel">Combos</span></div>
+      </div>
+      <div class="nav-item" onclick="toggleMenu('rep')">
+        <span class="icon">📊</span><span class="slabel flex-1">Reportes</span>
+        <span class="slabel chev text-xs" style="color:rgba(255,255,255,.3)" id="chev-rep">▾</span>
+        <div class="nav-tip">Reportes</div>
+      </div>
+      <div id="sub-rep" class="submenu closed">
+        <div class="sub-item" onclick="goPanel('r-ventas',this)"><span>📈</span><span class="slabel">Ventas</span></div>
+        <div class="sub-item" onclick="goPanel('r-cancel',this)"><span>❌</span><span class="slabel">Cancelaciones</span></div>
+        <div class="sub-item" onclick="goPanel('r-incid',this)"><span>⚠️</span><span class="slabel">Incidencias</span></div>
+      </div>
+    </nav>
+    <div class="relative mt-auto border-t border-white/10">
+      <div id="user-dd">
+        <div class="px-4 py-2.5 text-sm text-white/80 cursor-pointer hover:bg-white/10">✏️ Editar perfil</div>
+        <div class="px-4 py-2.5 text-sm cursor-pointer hover:bg-white/10" style="color:#fb923c" onclick="show('landing')">→ Cerrar sesión</div>
+      </div>
+      <div class="flex items-center gap-2.5 px-4 py-3.5 cursor-pointer hover:bg-white/5" onclick="toggleUserMenu()">
+        <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xs text-white" style="background:var(--orange)">JG</div>
+        <div class="slabel"><div class="text-xs font-semibold text-white">Juan García</div><div class="text-xs" style="color:rgba(255,255,255,.4)">Dueño</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right side: topbar + content -->
+  <div class="flex-1 flex flex-col overflow-hidden" style="background:var(--cream)">
+    <!-- Topbar -->
+    <div class="flex items-center justify-between px-6 py-4 bg-white flex-shrink-0" style="border-bottom:1px solid var(--border)">
+      <div><div id="tb-title">Pedidos del día</div><div id="tb-sub">Sábado 28 de marzo — Pizzería Centro</div></div>
+      <div class="flex items-center gap-3" id="tb-actions">
+        <span class="badge b-green">🟢 WhatsApp activo</span>
+        <button class="btn-p btn-sm" onclick="goPanel('manuales',null)">+ Pedido manual</button>
+      </div>
+    </div>
+
+    <!-- ── PANEL: PEDIDOS ── -->
+    <div id="panel-pedidos" class="panel active">
+      <div class="flex gap-4 px-6 py-3 bg-white flex-shrink-0" style="border-bottom:1px solid var(--border)">
+        <div class="flex items-center gap-2"><span class="text-lg">📦</span><div><span class="font-bold text-sm" style="color:var(--brown)">16</span><span class="text-xs ml-1" style="color:var(--muted)">pedidos hoy</span></div></div>
+        <div class="w-px" style="background:var(--border)"></div>
+        <div class="flex items-center gap-2"><span class="text-lg">💰</span><div><span class="font-bold text-sm" style="color:var(--brown)">$48.200</span><span class="text-xs ml-1" style="color:var(--muted)">en ventas</span></div></div>
+        <div class="w-px" style="background:var(--border)"></div>
+        <div class="flex items-center gap-2"><span class="text-lg">⏱</span><div><span class="font-bold text-sm" style="color:var(--brown)">22 min</span><span class="text-xs ml-1" style="color:var(--muted)">tiempo promedio</span></div></div>
+        <div class="w-px" style="background:var(--border)"></div>
+        <div class="flex items-center gap-2"><span class="text-lg">💬</span><div><span class="font-bold text-sm" style="color:var(--brown)">2</span><span class="text-xs ml-1" style="color:var(--muted)">chats activos</span></div></div>
+      </div>
+      <div class="flex-1 overflow-x-auto overflow-y-auto p-5">
+        <div class="flex gap-4" style="min-width:max-content;min-height:100%">
+          <div class="kcol"><div class="flex items-center justify-between mb-3"><span class="text-xs font-bold uppercase tracking-wide" style="color:var(--muted)">Pend. pago</span><span class="badge b-yellow">2</span></div><div class="space-y-3">
+            <div class="kcard" onclick="openDrawer('42')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#042</span><span class="badge b-yellow">💳 MP</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">María López</div><div class="text-xs mb-3" style="color:var(--muted)">1× Mozza gde, 6× Carne suave</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$3.900</span><span class="text-xs" style="color:var(--muted)">hace 3 min</span></div></div>
+            <div class="kcard" onclick="openDrawer('41')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#041</span><span class="badge b-yellow">💳 MP</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Carlos Ruiz</div><div class="text-xs mb-3" style="color:var(--muted)">Combo Familiar</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$5.200</span><span class="text-xs" style="color:var(--muted)">hace 8 min</span></div></div>
+          </div></div>
+          <div class="kcol"><div class="flex items-center justify-between mb-3"><span class="text-xs font-bold uppercase tracking-wide" style="color:var(--muted)">En preparación</span><span class="badge b-orange">3</span></div><div class="space-y-3">
+            <div class="kcard" style="border-left:3px solid var(--orange)" onclick="openDrawer('40')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#040</span><span class="badge b-green">✓ Pagado</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Ana Gómez</div><div class="text-xs mb-3" style="color:var(--muted)">2× Napo chica, 1× Coca 1.5L</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$4.100</span><span class="text-xs font-semibold" style="color:var(--orange)">⏱ 14 min</span></div></div>
+            <div class="kcard" onclick="openDrawer('39')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#039</span><span class="badge b-blue">💵 Efectivo</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Pedro Sánchez</div><div class="text-xs mb-3" style="color:var(--muted)">1× Fugazzeta grande</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$2.100</span><span class="text-xs" style="color:var(--muted)">hace 18 min</span></div></div>
+            <div class="kcard" onclick="openDrawer('38')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#038</span><span class="badge b-purple">📞 Tel.</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Laura Martínez</div><div class="text-xs mb-3" style="color:var(--muted)">12× Empanadas mixtas</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$3.600</span><span class="text-xs font-semibold" style="color:var(--orange)">⏱ 22 min</span></div></div>
+          </div></div>
+          <div class="kcol"><div class="flex items-center justify-between mb-3"><span class="text-xs font-bold uppercase tracking-wide" style="color:var(--muted)">A despacho</span><span class="badge b-blue">1</span></div><div class="space-y-3">
+            <div class="kcard" onclick="openDrawer('37')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#037</span><span class="badge b-green">✓ Pagado</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Roberto García</div><div class="text-xs mb-3" style="color:var(--muted)">1× Mozza gde, 2× Fanta</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$2.900</span><span class="text-xs" style="color:#1d4ed8">🏍 Delivery</span></div></div>
+          </div></div>
+          <div class="kcol"><div class="flex items-center justify-between mb-3"><span class="text-xs font-bold uppercase tracking-wide" style="color:var(--muted)">En delivery</span><span class="badge b-purple">2</span></div><div class="space-y-3">
+            <div class="kcard" onclick="openDrawer('36')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#036</span><span class="badge b-green">✓ Pagado</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Sofía Torres</div><div class="text-xs mb-3" style="color:var(--muted)">Combo Noche x2</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$7.800</span><span class="text-xs font-semibold" style="color:#7e22ce">🏍 En camino</span></div></div>
+            <div class="kcard" onclick="openDrawer('35')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#035</span><span class="badge b-blue">💵 Efectivo</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Diego Flores</div><div class="text-xs mb-3" style="color:var(--muted)">1× Napo gde, 6× Jamón y queso</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$4.500</span><span class="text-xs font-semibold" style="color:#7e22ce">🏍 En camino</span></div></div>
+          </div></div>
+          <div class="kcol"><div class="flex items-center justify-between mb-3"><span class="text-xs font-bold uppercase tracking-wide" style="color:var(--muted)">Entregado</span><span class="badge b-green">8 hoy</span></div><div class="space-y-3">
+            <div class="kcard" style="opacity:.6" onclick="openDrawer('34')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#034</span><span class="badge b-green">✓</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Marina Díaz</div><div class="text-xs mb-3" style="color:var(--muted)">1× Fugazzeta gde, Coca</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$2.500</span><span class="text-xs" style="color:#166534">✓ Entregado</span></div></div>
+            <div class="kcard" style="opacity:.5" onclick="openDrawer('33')"><div class="flex justify-between items-start mb-2"><span class="text-xs font-mono font-bold" style="color:var(--orange)">#033</span><span class="badge b-green">✓</span></div><div class="font-semibold text-sm mb-1" style="color:var(--brown)">Lucas Vega</div><div class="text-xs mb-3" style="color:var(--muted)">Combo Familiar</div><div class="flex justify-between items-center"><span class="font-bold text-sm" style="color:var(--brown)">$5.200</span><span class="text-xs" style="color:#166534">✓ Entregado</span></div></div>
+          </div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL: PEDIDOS MANUALES ── -->
+    <div id="panel-manuales" class="panel overflow-y-auto">
+      <div class="max-w-2xl mx-auto w-full p-6">
+        <div class="p-7 rounded-2xl bg-white border" style="border-color:var(--border)">
+          <h2 class="text-lg font-bold serif mb-1" style="color:var(--brown)">📞 Nuevo pedido telefónico</h2>
+          <p class="text-sm mb-6" style="color:var(--muted)">Cargá el pedido recibido por teléfono</p>
+
+          <!-- Paso 1: cliente -->
+          <div class="mb-6">
+            <div class="font-semibold text-xs uppercase tracking-widest mb-3" style="color:var(--muted)">Paso 1 — Cliente</div>
+            <div class="flex gap-2 mb-3">
+              <input class="fi flex-1" placeholder="Buscar por teléfono...">
+              <button class="btn-p btn-sm" style="border-radius:12px;white-space:nowrap">🔍 Buscar</button>
+            </div>
+            <div class="p-4 rounded-xl border" style="background:var(--cream);border-color:var(--border)">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white" style="background:var(--orange)">ML</div>
+                  <div><div class="font-semibold text-sm" style="color:var(--brown)">María López</div><div class="text-xs" style="color:var(--muted)">📱 +54 11 2345-6789 · Tiene WhatsApp</div></div>
+                </div>
+                <span class="badge b-green">✓ Encontrado</span>
+              </div>
+              <div class="mt-2 text-xs" style="color:var(--muted)">📍 Av. Corrientes 1800, CABA · 🛒 12 pedidos anteriores · 💰 Crédito: $0</div>
+            </div>
+            <p class="text-xs mt-2 text-center" style="color:var(--muted)">— o completar manualmente —</p>
+            <div class="grid grid-cols-2 gap-3 mt-2">
+              <div><label class="lbl">Nombre</label><input class="fi" placeholder="Nuevo cliente"></div>
+              <div><label class="lbl">Teléfono</label><input class="fi" placeholder="+54 11 ..."></div>
+            </div>
+            <div class="flex items-center gap-4 mt-3">
+              <label class="lbl" style="margin:0">¿Tiene WhatsApp?</label>
+              <label class="flex items-center gap-1.5 cursor-pointer text-sm" style="color:var(--brown)"><input type="radio" name="wap" checked> Sí</label>
+              <label class="flex items-center gap-1.5 cursor-pointer text-sm" style="color:var(--brown)"><input type="radio" name="wap"> No</label>
+            </div>
+          </div>
+
+          <!-- Paso 2: productos -->
+          <div class="mb-6">
+            <div class="font-semibold text-xs uppercase tracking-widest mb-3" style="color:var(--muted)">Paso 2 — Productos</div>
+            <div class="flex gap-2 mb-3 flex-wrap">
+              <button class="btn-o btn-sm" onclick="openModal('pizza')">+ Pizza</button>
+              <button class="btn-o btn-sm" onclick="openModal('empanada')">+ Empanadas</button>
+              <button class="btn-o btn-sm" onclick="openModal('bebida')">+ Bebida</button>
+              <button class="btn-o btn-sm" onclick="openModal('combo')">+ Combo</button>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between py-2 px-3 rounded-xl" style="background:var(--cream)">
+                <span class="text-sm" style="color:var(--brown)">1× Pizza Mozzarella Grande</span>
+                <div class="flex items-center gap-3"><span class="font-bold text-sm" style="color:var(--brown)">$2.100</span><button class="text-red-400 hover:text-red-600 text-xs font-bold">✕</button></div>
+              </div>
+              <div class="flex items-center justify-between py-2 px-3 rounded-xl" style="background:var(--cream)">
+                <span class="text-sm" style="color:var(--brown)">6× Empanada Carne Suave</span>
+                <div class="flex items-center gap-3"><span class="font-bold text-sm" style="color:var(--brown)">$1.800</span><button class="text-red-400 hover:text-red-600 text-xs font-bold">✕</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paso 3 & 4 -->
+          <div class="grid grid-cols-2 gap-5 mb-6">
+            <div>
+              <div class="font-semibold text-xs uppercase tracking-widest mb-3" style="color:var(--muted)">Paso 3 — Entrega</div>
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer text-sm p-3 rounded-xl border" style="border-color:var(--border);color:var(--brown)"><input type="radio" name="ent" checked> 🏍 Delivery</label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm p-3 rounded-xl border" style="border-color:var(--border);color:var(--brown)"><input type="radio" name="ent"> 🏪 Retiro en local</label>
+              </div>
+              <div class="mt-3"><label class="lbl">Dirección de entrega</label><input class="fi" value="Av. Corrientes 1800"></div>
+            </div>
+            <div>
+              <div class="font-semibold text-xs uppercase tracking-widest mb-3" style="color:var(--muted)">Paso 4 — Pago</div>
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer text-sm p-3 rounded-xl border" style="border-color:var(--border);color:var(--brown)"><input type="radio" name="pago" checked> 💵 Efectivo</label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm p-3 rounded-xl border" style="border-color:var(--border);color:var(--brown)"><input type="radio" name="pago"> 🏦 Transferencia</label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm p-3 rounded-xl border" style="border-color:var(--border);color:var(--brown)"><input type="radio" name="pago"> 💳 MercadoPago</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resumen -->
+          <div class="p-4 rounded-xl border mb-5" style="background:var(--cream);border-color:var(--border)">
+            <div class="flex justify-between text-sm mb-1" style="color:var(--brown)"><span>Subtotal</span><span class="font-semibold">$3.900</span></div>
+            <div class="flex justify-between text-sm mb-1" style="color:var(--muted)"><span>Crédito a favor</span><span>$0</span></div>
+            <div class="flex justify-between font-bold text-base border-t pt-2 mt-2" style="color:var(--brown);border-color:var(--border)"><span>Total</span><span>$3.900</span></div>
+          </div>
+          <div class="mb-5"><label class="lbl">Notas internas (opcional)</label><textarea class="fi" rows="2" placeholder="Ej: cliente quiere doble queso en la mozza"></textarea></div>
+          <div class="flex gap-3">
+            <button class="btn-o flex-1">Cancelar</button>
+            <button class="btn-p flex-1">✅ Confirmar pedido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL: CLIENTES ── -->
+    <div id="panel-clientes" class="panel overflow-y-auto">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <input class="fi" style="max-width:300px" placeholder="🔍  Buscar por nombre o teléfono...">
+          <select class="fi" style="max-width:180px"><option>Todos los clientes</option><option>Con crédito</option><option>Sin pedidos recientes</option></select>
+        </div>
+        <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--border)">
+          <table class="tbl">
+            <thead><tr><th>Cliente</th><th>Teléfono</th><th>Último pedido</th><th>Total pedidos</th><th>Crédito</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+              <tr style="cursor:pointer" onclick="openDrawer('cli-1')">
+                <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:var(--orange)">ML</div><div><div class="font-semibold text-sm">María López</div></div></div></td>
+                <td class="text-sm" style="color:var(--muted)">+54 11 2345-6789</td>
+                <td><span class="text-sm">Hoy, 20:15</span></td>
+                <td><span class="font-semibold text-sm">23 pedidos</span></td>
+                <td><span class="badge b-gray">$0</span></td>
+                <td><span class="badge b-green">🟢 WhatsApp</span></td>
+                <td><button class="text-xs font-semibold" style="color:var(--orange)">Ver →</button></td>
+              </tr>
+              <tr style="cursor:pointer" onclick="openDrawer('cli-2')">
+                <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#7e22ce">AR</div><div><div class="font-semibold text-sm">Ana Rodríguez</div></div></div></td>
+                <td class="text-sm" style="color:var(--muted)">+54 11 9876-5432</td>
+                <td><span class="text-sm">Ayer, 21:30</span></td>
+                <td><span class="font-semibold text-sm">8 pedidos</span></td>
+                <td><span class="badge b-orange">$1.200</span></td>
+                <td><span class="badge b-green">🟢 WhatsApp</span></td>
+                <td><button class="text-xs font-semibold" style="color:var(--orange)">Ver →</button></td>
+              </tr>
+              <tr style="cursor:pointer" onclick="openDrawer('cli-3')">
+                <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#1d4ed8">PS</div><div><div class="font-semibold text-sm">Pedro Sánchez</div></div></div></td>
+                <td class="text-sm" style="color:var(--muted)">+54 11 5678-1234</td>
+                <td><span class="text-sm">Hoy, 19:45</span></td>
+                <td><span class="font-semibold text-sm">5 pedidos</span></td>
+                <td><span class="badge b-gray">$0</span></td>
+                <td><span class="badge b-blue">📞 Tel.</span></td>
+                <td><button class="text-xs font-semibold" style="color:var(--orange)">Ver →</button></td>
+              </tr>
+              <tr style="cursor:pointer">
+                <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#166534">LV</div><div><div class="font-semibold text-sm">Laura Vega</div></div></div></td>
+                <td class="text-sm" style="color:var(--muted)">+54 11 3456-7890</td>
+                <td><span class="text-sm">Hace 3 días</span></td>
+                <td><span class="font-semibold text-sm">31 pedidos</span></td>
+                <td><span class="badge b-gray">$0</span></td>
+                <td><span class="badge b-green">🟢 WhatsApp</span></td>
+                <td><button class="text-xs font-semibold" style="color:var(--orange)">Ver →</button></td>
+              </tr>
+              <tr style="cursor:pointer">
+                <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#a16207">CF</div><div><div class="font-semibold text-sm">Carlos Fernández</div></div></div></td>
+                <td class="text-sm" style="color:var(--muted)">+54 11 7654-3210</td>
+                <td><span class="text-sm">Hace 1 semana</span></td>
+                <td><span class="font-semibold text-sm">2 pedidos</span></td>
+                <td><span class="badge b-orange">$500</span></td>
+                <td><span class="badge b-green">🟢 WhatsApp</span></td>
+                <td><button class="text-xs font-semibold" style="color:var(--orange)">Ver →</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL: AJ. EMPLEADOS ── -->
+    <div id="panel-empleados" class="panel overflow-y-auto">
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-5">
+          <p class="text-sm" style="color:var(--muted)">5 empleados asociados a este comercio</p>
+          <button class="btn-p btn-sm" onclick="openModal('emp')">+ Agregar empleado</button>
+        </div>
+        <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--border)">
+          <table class="tbl">
+            <thead><tr><th>Empleado</th><th>Email</th><th>Rol</th><th>Estado</th><th>Desde</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#1d4ed8">MG</div><div class="font-semibold text-sm">María González</div></div></td><td class="text-sm" style="color:var(--muted)">maria@pizzeria.com</td><td><span class="badge b-blue">Cajero</span></td><td><span class="badge b-green">Activo</span></td><td class="text-sm" style="color:var(--muted)">Ene 2025</td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs font-semibold text-red-400">Dar de baja</button></div></td></tr>
+              <tr><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#166534">CR</div><div class="font-semibold text-sm">Carlos Ruiz</div></div></td><td class="text-sm" style="color:var(--muted)">carlos@pizzeria.com</td><td><span class="badge b-green">Cocinero</span></td><td><span class="badge b-green">Activo</span></td><td class="text-sm" style="color:var(--muted)">Feb 2025</td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs font-semibold text-red-400">Dar de baja</button></div></td></tr>
+              <tr><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#7e22ce">LP</div><div class="font-semibold text-sm">Laura Pérez</div></div></td><td class="text-sm" style="color:var(--muted)">laura@pizzeria.com</td><td><span class="badge b-purple">Repartidor</span></td><td><span class="badge b-green">Activo</span></td><td class="text-sm" style="color:var(--muted)">Mar 2025</td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs font-semibold text-red-400">Dar de baja</button></div></td></tr>
+              <tr><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:var(--orange)">ML</div><div class="font-semibold text-sm">Marcos López</div></div></td><td class="text-sm" style="color:var(--muted)">marcos@pizzeria.com</td><td><span class="badge b-orange">Admin</span></td><td><span class="badge b-green">Activo</span></td><td class="text-sm" style="color:var(--muted)">Ene 2025</td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs font-semibold text-red-400">Dar de baja</button></div></td></tr>
+              <tr><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#9c7c6b">DV</div><div class="font-semibold text-sm">Diego Vera</div></div></td><td class="text-sm" style="color:var(--muted)">diego@email.com</td><td><span class="badge b-blue">Cajero</span></td><td><span class="badge b-yellow">Invitación pendiente</span></td><td class="text-sm" style="color:var(--muted)">Mar 2025</td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Reenviar</button><button class="text-xs font-semibold text-red-400">Cancelar</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs mt-3" style="color:var(--muted)">Los empleados reciben un email de invitación para crear su contraseña.</p>
+      </div>
+    </div>
+
+    <!-- ── PANEL: AJ. PRODUCTOS ── -->
+    <div id="panel-productos" class="panel overflow-y-auto">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-5">
+          <div class="flex gap-2">
+            <button class="btn-p btn-sm active-tab" id="tab-pizzas" onclick="switchTab('pizzas')">Pizzas</button>
+            <button class="btn-o btn-sm" id="tab-empanadas" onclick="switchTab('empanadas')">Empanadas</button>
+            <button class="btn-o btn-sm" id="tab-bebidas" onclick="switchTab('bebidas')">Bebidas</button>
+          </div>
+          <button class="btn-p btn-sm" onclick="openModal('prod')">+ Nuevo producto</button>
+        </div>
+        <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--border)">
+          <table class="tbl">
+            <thead><tr><th>Código</th><th>Nombre</th><th>Descripción</th><th>Precio Grande</th><th>Precio Chica</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><span class="font-mono text-xs font-bold" style="color:var(--orange)">PIZ-MOZ</span></td><td><div class="font-semibold text-sm">Pizza Mozzarella</div><div class="text-xs" style="color:var(--muted)">Mozza</div></td><td class="text-xs" style="color:var(--muted);max-width:160px">Salsa de tomate, mozzarella, orégano</td><td class="font-semibold text-sm">$2.100</td><td class="font-semibold text-sm">$1.400</td><td><span class="badge b-green">Disponible</span></td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs text-red-400 font-semibold">Desactivar</button></div></td></tr>
+              <tr><td><span class="font-mono text-xs font-bold" style="color:var(--orange)">PIZ-FUG</span></td><td><div class="font-semibold text-sm">Pizza Fugazzeta</div><div class="text-xs" style="color:var(--muted)">Fugazzeta</div></td><td class="text-xs" style="color:var(--muted);max-width:160px">Cebolla, mozzarella, aceitunas</td><td class="font-semibold text-sm">$2.300</td><td class="font-semibold text-sm">$1.550</td><td><span class="badge b-green">Disponible</span></td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs text-red-400 font-semibold">Desactivar</button></div></td></tr>
+              <tr><td><span class="font-mono text-xs font-bold" style="color:var(--orange)">PIZ-NAP</span></td><td><div class="font-semibold text-sm">Pizza Napolitana</div><div class="text-xs" style="color:var(--muted)">Napo</div></td><td class="text-xs" style="color:var(--muted);max-width:160px">Salsa, tomate fresco, mozzarella, ajo</td><td class="font-semibold text-sm">$2.200</td><td class="font-semibold text-sm">$1.450</td><td><span class="badge b-green">Disponible</span></td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs text-red-400 font-semibold">Desactivar</button></div></td></tr>
+              <tr style="opacity:.5"><td><span class="font-mono text-xs font-bold" style="color:var(--muted)">PIZ-ANÑ</span></td><td><div class="font-semibold text-sm">Pizza Anchoas</div><div class="text-xs" style="color:var(--muted)">Anchoas</div></td><td class="text-xs" style="color:var(--muted);max-width:160px">Anchoas, aceitunas, mozzarella</td><td class="text-sm" style="color:var(--muted)">$2.400</td><td class="text-sm" style="color:var(--muted)">$1.600</td><td><span class="badge b-gray">No disponible</span></td><td><div class="flex gap-2"><button class="text-xs font-semibold" style="color:var(--orange)">Editar</button><button class="text-xs font-semibold" style="color:#166534">Activar</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3 p-3 rounded-xl text-xs" style="background:var(--orange-pale);color:var(--brown-mid)">⚠️ Los productos desactivados no aparecen en el menú del chatbot ni en el formulario de pedidos manuales.</div>
+      </div>
+    </div>
+
+    <!-- ── PANEL: AJ. COMBOS ── -->
+    <div id="panel-combos" class="panel overflow-y-auto">
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-5">
+          <p class="text-sm" style="color:var(--muted)">3 combos configurados</p>
+          <button class="btn-p btn-sm" onclick="openModal('combo')">+ Nuevo combo</button>
+        </div>
+        <div class="grid grid-cols-1 gap-4 max-w-3xl">
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)">
+            <div class="flex justify-between items-start mb-3">
+              <div><div class="flex items-center gap-2"><span class="font-mono text-xs font-bold" style="color:var(--orange)">CMB-FAM</span><span class="badge b-green">Disponible</span></div><div class="font-bold text-base mt-1 serif" style="color:var(--brown)">Combo Familiar</div></div>
+              <div class="text-right"><div class="text-2xl font-black serif" style="color:var(--orange)">$5.200</div><div class="text-xs" style="color:var(--muted)">precio especial</div></div>
+            </div>
+            <div class="text-sm mb-3" style="color:var(--muted)">1 pizza grande a elección + 12 empanadas a elección + 1 Coca-Cola 1.5L</div>
+            <div class="flex gap-2"><span class="badge b-gray">1× Pizza Grande</span><span class="badge b-gray">12× Empanadas</span><span class="badge b-gray">1× Coca 1.5L</span></div>
+            <div class="flex gap-2 mt-3 border-t pt-3" style="border-color:var(--border)"><button class="btn-o btn-sm text-xs">✏️ Editar</button><button class="text-xs font-semibold text-red-400 px-3">Desactivar</button></div>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)">
+            <div class="flex justify-between items-start mb-3">
+              <div><div class="flex items-center gap-2"><span class="font-mono text-xs font-bold" style="color:var(--orange)">CMB-NOCH</span><span class="badge b-green">Disponible</span></div><div class="font-bold text-base mt-1 serif" style="color:var(--brown)">Combo Noche</div></div>
+              <div class="text-right"><div class="text-2xl font-black serif" style="color:var(--orange)">$3.900</div><div class="text-xs" style="color:var(--muted)">precio especial</div></div>
+            </div>
+            <div class="text-sm mb-3" style="color:var(--muted)">2 pizzas chicas a elección + 2 bebidas 600ml</div>
+            <div class="flex gap-2"><span class="badge b-gray">2× Pizza Chica</span><span class="badge b-gray">2× Bebida 600ml</span></div>
+            <div class="flex gap-2 mt-3 border-t pt-3" style="border-color:var(--border)"><button class="btn-o btn-sm text-xs">✏️ Editar</button><button class="text-xs font-semibold text-red-400 px-3">Desactivar</button></div>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border);opacity:.6">
+            <div class="flex justify-between items-start mb-3">
+              <div><div class="flex items-center gap-2"><span class="font-mono text-xs font-bold" style="color:var(--muted)">CMB-PROM</span><span class="badge b-gray">No disponible</span></div><div class="font-bold text-base mt-1 serif" style="color:var(--brown)">Combo Promoción</div></div>
+              <div class="text-right"><div class="text-2xl font-black serif" style="color:var(--muted)">$2.800</div></div>
+            </div>
+            <div class="text-sm mb-3" style="color:var(--muted)">1 pizza chica + 6 empanadas + 1 Fanta 600ml</div>
+            <div class="flex gap-2 mt-3 border-t pt-3" style="border-color:var(--border)"><button class="btn-o btn-sm text-xs">✏️ Editar</button><button class="text-xs font-semibold px-3" style="color:#166534">Activar</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL: PERMISOS ── -->
+    <div id="panel-permisos" class="panel overflow-y-auto">
+      <div class="p-6 max-w-3xl">
+        <p class="text-sm mb-5" style="color:var(--muted)">Definí qué puede hacer cada rol en este comercio</p>
+        <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--border)">
+          <table class="tbl">
+            <thead><tr><th>Acción</th><th class="text-center">Dueño</th><th class="text-center">Admin</th><th class="text-center">Cajero</th><th class="text-center">Cocinero</th><th class="text-center">Repartidor</th></tr></thead>
+            <tbody id="perms-body">
+              <tr><td class="text-sm font-medium">Ver todos los pedidos</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center text-xs" style="color:var(--muted)">Solo prep.</td><td class="text-center text-xs" style="color:var(--muted)">Solo desp.</td></tr>
+              <tr><td class="text-sm font-medium">Avanzar estado del pedido</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td></tr>
+              <tr><td class="text-sm font-medium">Marcar como pagado</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Cancelar pedido</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Crear pedido telefónico</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Atender derivación HITL</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Gestionar créditos de clientes</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Editar menú / catálogo</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Gestionar empleados</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Ver reportes</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center text-xs" style="color:var(--muted)">Básicos</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Gestionar números WhatsApp</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">❌</td><td class="text-center">❌</td></tr>
+              <tr><td class="text-sm font-medium">Reportar incidencia</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">✅</td><td class="text-center">❌</td><td class="text-center">✅</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs mt-3" style="color:var(--muted)">Los permisos del rol Dueño no son editables. Los demás pueden ajustarse según las necesidades del comercio.</p>
+      </div>
+    </div>
+
+    <!-- ── PANEL: REPORTES VENTAS ── -->
+    <div id="panel-r-ventas" class="panel overflow-y-auto">
+      <div class="p-6 max-w-4xl">
+        <div class="flex gap-3 mb-6 flex-wrap">
+          <select class="fi" style="max-width:160px"><option>Hoy</option><option>Esta semana</option><option selected>Este mes</option><option>Personalizado</option></select>
+          <button class="btn-o btn-sm">Exportar CSV</button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)"><div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Ventas del mes</div><div class="text-3xl font-black serif" style="color:var(--brown)">$186.400</div><div class="text-xs mt-1" style="color:#166534">▲ 12% vs mes anterior</div></div>
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)"><div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Pedidos totales</div><div class="text-3xl font-black serif" style="color:var(--brown)">312</div><div class="text-xs mt-1" style="color:#166534">▲ 8% vs mes anterior</div></div>
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)"><div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Ticket promedio</div><div class="text-3xl font-black serif" style="color:var(--brown)">$598</div><div class="text-xs mt-1" style="color:var(--muted)">Sin variación</div></div>
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)"><div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Cancelaciones</div><div class="text-3xl font-black serif" style="color:var(--brown)">18</div><div class="text-xs mt-1" style="color:#dc2626">▲ 3 vs mes anterior</div></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)">
+            <div class="font-bold serif mb-4" style="color:var(--brown)">Métodos de pago</div>
+            <div class="space-y-3">
+              <div><div class="flex justify-between text-sm mb-1"><span style="color:var(--brown)">MercadoPago</span><span class="font-bold" style="color:var(--brown)">58%</span></div><div class="h-2 rounded-full" style="background:var(--border)"><div class="h-2 rounded-full" style="background:var(--orange);width:58%"></div></div></div>
+              <div><div class="flex justify-between text-sm mb-1"><span style="color:var(--brown)">Efectivo</span><span class="font-bold" style="color:var(--brown)">31%</span></div><div class="h-2 rounded-full" style="background:var(--border)"><div class="h-2 rounded-full" style="background:#1d4ed8;width:31%"></div></div></div>
+              <div><div class="flex justify-between text-sm mb-1"><span style="color:var(--brown)">Transferencia</span><span class="font-bold" style="color:var(--brown)">11%</span></div><div class="h-2 rounded-full" style="background:var(--border)"><div class="h-2 rounded-full" style="background:#166534;width:11%"></div></div></div>
+            </div>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border" style="border-color:var(--border)">
+            <div class="font-bold serif mb-4" style="color:var(--brown)">Productos más pedidos</div>
+            <div class="space-y-2">
+              <div class="flex justify-between items-center text-sm"><span style="color:var(--brown)">1. Pizza Mozzarella Grande</span><span class="badge b-orange">124 veces</span></div>
+              <div class="flex justify-between items-center text-sm"><span style="color:var(--brown)">2. Combo Familiar</span><span class="badge b-orange">89 veces</span></div>
+              <div class="flex justify-between items-center text-sm"><span style="color:var(--brown)">3. Empanada Carne Suave</span><span class="badge b-orange">486 uds</span></div>
+              <div class="flex justify-between items-center text-sm"><span style="color:var(--brown)">4. Pizza Fugazzeta Grande</span><span class="badge b-gray">78 veces</span></div>
+              <div class="flex justify-between items-center text-sm"><span style="color:var(--brown)">5. Coca-Cola 1.5L</span><span class="badge b-gray">201 uds</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PANEL GENÉRICO (para panels sin contenido aún) ── -->
+    <div id="panel-r-cancel" class="panel overflow-y-auto"><div class="p-10 text-center" style="color:var(--muted)"><div class="text-5xl mb-4">📋</div><div class="font-bold serif text-xl mb-2" style="color:var(--brown)">Reporte de Cancelaciones</div><p class="text-sm">Disponible próximamente</p></div></div>
+    <div id="panel-r-incid" class="panel overflow-y-auto"><div class="p-10 text-center" style="color:var(--muted)"><div class="text-5xl mb-4">⚠️</div><div class="font-bold serif text-xl mb-2" style="color:var(--brown)">Reporte de Incidencias</div><p class="text-sm">Disponible próximamente</p></div></div>
+
+  </div><!-- end main -->
+</div><!-- end dashboard -->
+
+<!-- ══════════ DRAWER: DETALLE PEDIDO / CLIENTE ══════════ -->
+<div id="drawer-overlay" onclick="closeDrawer()"></div>
+<div id="drawer">
+  <div class="p-6 border-b flex items-center justify-between sticky top-0 bg-white z-10" style="border-color:var(--border)">
+    <div id="drawer-title" class="font-bold serif text-lg" style="color:var(--brown)">Detalle del pedido</div>
+    <button onclick="closeDrawer()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 text-gray-400 font-bold">✕</button>
+  </div>
+  <div id="drawer-content" class="p-6"></div>
+</div>
+
+<!-- ══════════ MODAL ══════════ -->
+<div id="modal-overlay" onclick="closeModal()">
+  <div id="modal" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="modal-title" class="font-bold serif text-xl" style="color:var(--brown)">Agregar pizza</h3>
+      <button onclick="closeModal()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 text-gray-400 font-bold">✕</button>
+    </div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+var rType='d', sbExpanded=true, submenus={aj:false,rep:false}, uMenuOpen=false;
+var panelConfig = {
+  'pedidos':   {title:'Pedidos del día',       sub:'Sábado 28 de marzo — Pizzería Centro', actions:'<span class="badge b-green">🟢 WhatsApp activo</span><button class="btn-p btn-sm ml-2" onclick="goPanel(\'manuales\',null)">+ Pedido manual</button>'},
+  'manuales':  {title:'Nuevo pedido manual',   sub:'Cargá un pedido recibido por teléfono', actions:''},
+  'clientes':  {title:'Clientes',              sub:'Pizzería Centro · 5 clientes registrados', actions:''},
+  'empleados': {title:'Ajustes › Empleados',   sub:'Gestión del equipo', actions:'<button class="btn-p btn-sm" onclick="openModal(\'emp\')">+ Agregar empleado</button>'},
+  'productos': {title:'Ajustes › Productos',   sub:'Gestión del catálogo', actions:'<button class="btn-p btn-sm" onclick="openModal(\'prod\')">+ Nuevo producto</button>'},
+  'combos':    {title:'Ajustes › Combos',      sub:'Gestión de combos', actions:'<button class="btn-p btn-sm" onclick="openModal(\'combo\')">+ Nuevo combo</button>'},
+  'permisos':  {title:'Ajustes › Permisos',    sub:'Permisos por rol en este comercio', actions:''},
+  'r-ventas':  {title:'Reportes › Ventas',     sub:'Marzo 2025', actions:'<button class="btn-o btn-sm">Exportar CSV</button>'},
+  'r-cancel':  {title:'Reportes › Cancelaciones', sub:'', actions:''},
+  'r-incid':   {title:'Reportes › Incidencias',   sub:'', actions:''},
+};
+
+function show(v) {
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.dash-wrap').forEach(el=>el.classList.remove('active'));
+  var el=document.getElementById('view-'+v);
+  if(el) el.classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function goPanel(name, navEl) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  var p=document.getElementById('panel-'+name);
+  if(p) p.classList.add('active');
+  // update topbar
+  var cfg=panelConfig[name]||{title:name,sub:'',actions:''};
+  document.getElementById('tb-title').textContent=cfg.title;
+  document.getElementById('tb-sub').textContent=cfg.sub;
+  document.getElementById('tb-actions').innerHTML=cfg.actions;
+  // update nav highlight
+  document.querySelectorAll('.nav-item,.sub-item').forEach(i=>i.classList.remove('active'));
+  if(navEl) navEl.classList.add('active');
+  else {
+    // highlight by panel id mapping
+    var map={'pedidos':'nav-pedidos','manuales':'nav-manuales','clientes':'nav-clientes'};
+    if(map[name]) document.getElementById(map[name]).classList.add('active');
+  }
+}
+
+function toggleSB() {
+  sbExpanded=!sbExpanded;
+  document.getElementById('sidebar').classList.toggle('collapsed',!sbExpanded);
+  document.getElementById('toggle-sb').textContent=sbExpanded?'◀':'▶';
+}
+
+function toggleMenu(k) {
+  submenus[k]=!submenus[k];
+  var sub=document.getElementById('sub-'+k);
+  sub.classList.toggle('closed',!submenus[k]);
+  sub.classList.toggle('open',submenus[k]);
+  document.getElementById('chev-'+k).textContent=submenus[k]?'▴':'▾';
+}
+
+function toggleUserMenu() {
+  uMenuOpen=!uMenuOpen;
+  document.getElementById('user-dd').classList.toggle('open',uMenuOpen);
+}
+
+function selType(t) {
+  rType=t;
+  document.getElementById('td').classList.toggle('sel',t==='d');
+  document.getElementById('te').classList.toggle('sel',t==='e');
+}
+
+function rStep(n) {
+  [1,2,3].forEach(i=>{var el=document.getElementById('rs'+i);if(el)el.classList.add('hidden')});
+  document.getElementById('rs'+n).classList.remove('hidden');
+  [1,2,3].forEach(i=>{
+    var d=document.getElementById('s'+i);
+    d.classList.remove('cur','done');
+    if(i<n) d.classList.add('done'); else if(i===n) d.classList.add('cur');
+  });
+  ['l12','l23'].forEach((id,i)=>document.getElementById(id).classList.toggle('done',n>i+1));
+  if(n===3&&rType==='e'){
+    document.getElementById('r3t').textContent='¡Cuenta creada!';
+    document.getElementById('r3s').textContent='El dueño del comercio te enviará acceso.';
+    document.getElementById('r3f').innerHTML='<div class="text-center py-6"><div class="text-5xl mb-3">🎉</div><p class="text-sm" style="color:var(--muted)">Revisá tu email para confirmar tu cuenta.</p></div>';
+  }
+}
+
+// ── DRAWER ──
+var drawerData = {
+  '42':  {order:true, num:'#042', name:'María López', phone:'+54 11 2345-6789', items:'1× Pizza Mozzarella Grande — $2.100\n6× Empanada Carne Suave — $1.800', total:'$3.900', estado:'Pendiente de pago', pago:'💳 MercadoPago', entrega:'🏍 Delivery — Av. Corrientes 1800'},
+  '41':  {order:true, num:'#041', name:'Carlos Ruiz', phone:'+54 11 5555-0000', items:'1× Combo Familiar — $5.200', total:'$5.200', estado:'Pendiente de pago', pago:'💳 MercadoPago', entrega:'🏍 Delivery — Av. Santa Fe 3400'},
+  '40':  {order:true, num:'#040', name:'Ana Gómez', phone:'+54 11 9999-1111', items:'2× Pizza Napolitana Chica — $2.900\n1× Coca-Cola 1.5L — $400', total:'$3.300', estado:'En preparación', pago:'✓ Pagado — MP', entrega:'🏍 Delivery — Scalabrini Ortiz 1200'},
+  '39':  {order:true, num:'#039', name:'Pedro Sánchez', phone:'+54 11 7777-2222', items:'1× Pizza Fugazzeta Grande — $2.300', total:'$2.300', estado:'En preparación', pago:'💵 Efectivo al entregar', entrega:'🏪 Retiro en local'},
+  'cli-1': {client:true, name:'María López', phone:'+54 11 2345-6789', addr:'Av. Corrientes 1800, CABA', pedidos:23, credito:'$0', ultimo:'Hoy 20:15'},
+  'cli-2': {client:true, name:'Ana Rodríguez', phone:'+54 11 9876-5432', addr:'Av. Callao 900, CABA', pedidos:8, credito:'$1.200', ultimo:'Ayer 21:30'},
+};
+
+function openDrawer(id) {
+  var d=drawerData[id];
+  if(!d){document.getElementById('drawer-content').innerHTML='<p style="color:var(--muted)">Sin datos de ejemplo</p>';document.getElementById('drawer').classList.add('open');document.getElementById('drawer-overlay').classList.add('open');return;}
+  var html='';
+  if(d.order){
+    document.getElementById('drawer-title').textContent='Pedido '+d.num;
+    html=`<div class="space-y-4">
+      <div class="p-4 rounded-xl" style="background:var(--cream)"><div class="font-bold text-sm mb-1 serif" style="color:var(--brown)">${d.name}</div><div class="text-xs" style="color:var(--muted)">${d.phone}</div></div>
+      <div><div class="font-semibold text-xs uppercase tracking-wide mb-2" style="color:var(--muted)">Productos</div><div class="space-y-1">${d.items.split('\n').map(i=>`<div class="text-sm py-2 border-b flex justify-between" style="border-color:var(--border);color:var(--brown)"><span>${i.split(' — ')[0]}</span><span class="font-semibold">${i.split(' — ')[1]||''}</span></div>`).join('')}</div><div class="flex justify-between font-bold text-base pt-3" style="color:var(--brown)"><span>Total</span><span>${d.total}</span></div></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="p-3 rounded-xl" style="background:var(--cream)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Estado</div><div class="text-sm font-semibold" style="color:var(--brown)">${d.estado}</div></div>
+        <div class="p-3 rounded-xl" style="background:var(--cream)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Pago</div><div class="text-sm font-semibold" style="color:var(--brown)">${d.pago}</div></div>
+      </div>
+      <div class="p-3 rounded-xl" style="background:var(--cream)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Entrega</div><div class="text-sm" style="color:var(--brown)">${d.entrega}</div></div>
+      <div class="flex gap-2 pt-2"><button class="btn-p flex-1 btn-sm">Avanzar estado</button><button class="btn-o btn-sm" style="color:#dc2626;border-color:#fca5a5">Cancelar</button></div>
+    </div>`;
+  } else if(d.client){
+    document.getElementById('drawer-title').textContent=d.name;
+    html=`<div class="space-y-4">
+      <div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white" style="background:var(--orange)">${d.name.split(' ').map(n=>n[0]).join('')}</div><div><div class="font-bold serif" style="color:var(--brown)">${d.name}</div><div class="text-sm" style="color:var(--muted)">${d.phone}</div></div></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="p-3 rounded-xl" style="background:var(--cream)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Total pedidos</div><div class="text-xl font-black serif" style="color:var(--brown)">${d.pedidos}</div></div>
+        <div class="p-3 rounded-xl" style="background:var(--orange-pale)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Crédito disponible</div><div class="text-xl font-black serif" style="color:var(--orange)">${d.credito}</div></div>
+      </div>
+      <div class="p-3 rounded-xl" style="background:var(--cream)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Dirección</div><div class="text-sm" style="color:var(--brown)">${d.addr}</div></div>
+      <div class="p-3 rounded-xl" style="background:var(--cream)"><div class="text-xs font-semibold mb-1" style="color:var(--muted)">Último pedido</div><div class="text-sm" style="color:var(--brown)">${d.ultimo}</div></div>
+      <div class="font-semibold text-xs uppercase tracking-wide mt-2" style="color:var(--muted)">Historial reciente</div>
+      <div class="space-y-2">
+        <div class="flex justify-between text-sm p-3 rounded-xl" style="background:var(--cream)"><span style="color:var(--brown)">#042 · 1× Mozza gde, 6× Carne</span><span class="font-bold" style="color:var(--brown)">$3.900</span></div>
+        <div class="flex justify-between text-sm p-3 rounded-xl" style="background:var(--cream)"><span style="color:var(--brown)">#031 · Combo Familiar</span><span class="font-bold" style="color:var(--brown)">$5.200</span></div>
+        <div class="flex justify-between text-sm p-3 rounded-xl" style="background:var(--cream)"><span style="color:var(--brown)">#018 · 2× Napo chica + Coca</span><span class="font-bold" style="color:var(--brown)">$3.300</span></div>
+      </div>
+    </div>`;
+  }
+  document.getElementById('drawer-content').innerHTML=html;
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('drawer-overlay').classList.remove('open');}
+
+// ── MODAL ──
+var modalContents={
+  pizza: {title:'Agregar pizza al pedido', html:`<div class="space-y-3"><div><label class="lbl">Gusto</label><select class="fi"><option>Mozzarella</option><option>Fugazzeta</option><option>Napolitana</option><option>Mitad y mitad</option></select></div><div><label class="lbl">Tamaño</label><div class="flex gap-2"><label class="flex items-center gap-2 cursor-pointer flex-1 p-3 rounded-xl border text-sm" style="border-color:var(--border)"><input type="radio" name="tam" checked> Grande — $2.100</label><label class="flex items-center gap-2 cursor-pointer flex-1 p-3 rounded-xl border text-sm" style="border-color:var(--border)"><input type="radio" name="tam"> Chica — $1.400</label></div></div><div><label class="lbl">Cantidad</label><input type="number" class="fi" value="1" min="1"></div><div class="flex gap-3 mt-2"><button class="btn-o flex-1" onclick="closeModal()">Cancelar</button><button class="btn-p flex-1" onclick="closeModal()">Agregar al pedido</button></div></div>`},
+  empanada: {title:'Agregar empanadas', html:`<div class="space-y-3"><div><label class="lbl">Gusto</label><select class="fi"><option>Carne Suave</option><option>Pollo</option><option>Jamón y queso</option></select></div><div><label class="lbl">Cantidad</label><input type="number" class="fi" value="6" min="1"></div><div class="p-3 rounded-xl text-sm" style="background:var(--cream);color:var(--muted)">6 unidades: $1.800 · 12 unidades (docena): $3.200</div><div class="flex gap-3 mt-2"><button class="btn-o flex-1" onclick="closeModal()">Cancelar</button><button class="btn-p flex-1" onclick="closeModal()">Agregar al pedido</button></div></div>`},
+  bebida: {title:'Agregar bebida', html:`<div class="space-y-3"><div><label class="lbl">Bebida</label><select class="fi"><option>Coca-Cola 1.5L — $400</option><option>Fanta 600ml — $300</option><option>Agua 500ml — $200</option></select></div><div><label class="lbl">Cantidad</label><input type="number" class="fi" value="1" min="1"></div><div class="flex gap-3 mt-2"><button class="btn-o flex-1" onclick="closeModal()">Cancelar</button><button class="btn-p flex-1" onclick="closeModal()">Agregar al pedido</button></div></div>`},
+  combo: {title:'Nuevo combo', html:`<div class="space-y-3"><div><label class="lbl">Nombre del combo</label><input class="fi" placeholder="Combo Familiar"></div><div><label class="lbl">Descripción</label><input class="fi" placeholder="Qué incluye el combo"></div><div><label class="lbl">Precio especial</label><input class="fi" placeholder="$5.200"></div><div><label class="lbl">Productos incluidos</label><input class="fi" placeholder="Ej: 1× Pizza Grande, 12× Empanadas, 1× Coca"></div><div class="flex gap-3 mt-2"><button class="btn-o flex-1" onclick="closeModal()">Cancelar</button><button class="btn-p flex-1" onclick="closeModal()">Guardar combo</button></div></div>`},
+  emp: {title:'Agregar empleado', html:`<div class="space-y-3"><div class="grid grid-cols-2 gap-3"><div><label class="lbl">Nombre</label><input class="fi" placeholder="María"></div><div><label class="lbl">Apellido</label><input class="fi" placeholder="González"></div></div><div><label class="lbl">Email</label><input type="email" class="fi" placeholder="maria@pizzeria.com"></div><div><label class="lbl">Rol en este comercio</label><select class="fi"><option>Cajero</option><option>Cocinero</option><option>Repartidor</option><option>Admin</option></select></div><p class="text-xs" style="color:var(--muted)">El empleado recibirá un email de invitación para crear su contraseña.</p><div class="flex gap-3 mt-2"><button class="btn-o flex-1" onclick="closeModal()">Cancelar</button><button class="btn-p flex-1" onclick="closeModal()">Enviar invitación</button></div></div>`},
+  prod: {title:'Nuevo producto', html:`<div class="space-y-3"><div class="grid grid-cols-2 gap-3"><div><label class="lbl">Código</label><input class="fi" placeholder="PIZ-XXX"></div><div><label class="lbl">Categoría</label><select class="fi"><option>Pizza</option><option>Empanada</option><option>Bebida</option></select></div></div><div><label class="lbl">Nombre completo</label><input class="fi" placeholder="Pizza Mozzarella"></div><div><label class="lbl">Nombre corto (para tickets)</label><input class="fi" placeholder="Mozza"></div><div><label class="lbl">Descripción</label><textarea class="fi" rows="2" placeholder="Ingredientes..."></textarea></div><div class="grid grid-cols-2 gap-3"><div><label class="lbl">Precio Grande / Unidad</label><input class="fi" placeholder="$2.100"></div><div><label class="lbl">Precio Chica (si aplica)</label><input class="fi" placeholder="$1.400"></div></div><div class="flex gap-3 mt-2"><button class="btn-o flex-1" onclick="closeModal()">Cancelar</button><button class="btn-p flex-1" onclick="closeModal()">Guardar producto</button></div></div>`},
+};
+function openModal(type){
+  var m=modalContents[type]||{title:'Modal',html:'<p>Sin contenido</p>'};
+  document.getElementById('modal-title').textContent=m.title;
+  document.getElementById('modal-content').innerHTML=m.html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
+
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#sidebar .relative')&&uMenuOpen){uMenuOpen=false;document.getElementById('user-dd').classList.remove('open');}
+});
+</script>
+</body>
+</html>

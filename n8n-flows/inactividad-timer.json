@@ -22,8 +22,9 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "minutos_inactiva", "value": "30" },
-            { "name": "status",           "value": "active" }
+            { "name": "minutos_inactiva", "value": "10" },
+            { "name": "status",           "value": "active" },
+            { "name": "include_hitl",     "value": "false" }
           ]
         },
         "options": {}
@@ -36,32 +37,23 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "leftValue": "={{ $json.length }}",
-              "rightValue": 0,
-              "operator": { "type": "number", "operation": "gt" }
-            }
-          ]
-        }
+        "jsCode": "// Clasifica sesiones en dos fases según minutos de inactividad:\n// Fase 1 (10–14 min): enviar recordatorio\n// Fase 2 (≥ 15 min): cerrar sesión y descartar pedido activo\nconst sessions = Array.isArray($json) ? $json : [];\nconst now = new Date();\nconst toRemind = [];\nconst toClose = [];\n\nfor (const s of sessions) {\n  const lastMsgAt = s.last_message_at || s.updated_at;\n  if (!lastMsgAt) continue;\n  const minutesInactive = (now - new Date(lastMsgAt)) / 60000;\n  if (minutesInactive >= 15) {\n    toClose.push(s);\n  } else if (minutesInactive >= 10) {\n    toRemind.push(s);\n  }\n}\n\nreturn [{ json: { toRemind, toClose } }];"
       },
       "id": "c3d4e5f6-0003-0003-0003-000000000003",
-      "name": "¿Hay sesiones?",
-      "type": "n8n-nodes-base.if",
+      "name": "Clasificar Sesiones",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [680, 300]
     },
     {
       "parameters": {
-        "fieldToSplitOut": "sessions",
-        "options": {}
+        "jsCode": "const { toRemind } = $json;\nif (!toRemind || toRemind.length === 0) return [];\nreturn toRemind.map(s => ({ json: s }));"
       },
       "id": "c3d4e5f6-0003-0003-0003-000000000004",
-      "name": "Split Sesiones",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [900, 240]
+      "name": "Preparar Recordatorios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 180]
     },
     {
       "parameters": {
@@ -77,7 +69,7 @@
         "bodyParameters": {
           "parameters": [
             { "name": "phone",   "value": "={{ $json.customer_phone }}" },
-            { "name": "message", "value": "=⏰ ¿Seguís ahí? Tu conversación lleva un rato sin actividad. ¿Puedo ayudarte con algo más?" },
+            { "name": "message", "value": "=⏰ ¿Seguís ahí? Tu conversación lleva un rato sin actividad. Si querés continuar con tu pedido, escribime. Si no, cerramos la sesión en unos minutos." },
             { "name": "isGroup", "value": false }
           ]
         },
@@ -87,7 +79,17 @@
       "name": "Enviar Recordatorio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 140]
+      "position": [1120, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { toClose } = $('Clasificar Sesiones').item.json;\nif (!toClose || toClose.length === 0) return [];\nreturn toClose.map(s => ({ json: s }));"
+      },
+      "id": "c3d4e5f6-0003-0003-0003-000000000006",
+      "name": "Preparar Cierres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 420]
     },
     {
       "parameters": {
@@ -103,21 +105,75 @@
         },
         "options": {}
       },
-      "id": "c3d4e5f6-0003-0003-0003-000000000006",
+      "id": "c3d4e5f6-0003-0003-0003-000000000007",
       "name": "Cerrar Sesión",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 340]
+      "position": [1120, 420]
     },
     {
       "parameters": {
-        "jsCode": "// Sin sesiones inactivas — no hacer nada\nreturn [];"
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $('Preparar Cierres').item.json.active_order_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "isNotEmpty" }
+            }
+          ]
+        }
       },
-      "id": "c3d4e5f6-0003-0003-0003-000000000007",
-      "name": "Sin acción",
-      "type": "n8n-nodes-base.code",
+      "id": "c3d4e5f6-0003-0003-0003-000000000008",
+      "name": "¿Tiene Pedido Activo?",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 420]
+      "position": [1340, 420]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.API_BASE_URL }}/pizzerias/{{ $('Preparar Cierres').item.json.pizzeria_id }}/pedidos/{{ $('Preparar Cierres').item.json.active_order_id }}/estado",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "status", "value": "discarded" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-0003-0003-0003-000000000009",
+      "name": "Descartar Pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 340]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WPPCONNECT_BASE_URL }}/api/{{ $('Preparar Cierres').item.json.whatsapp_session_name }}/send-message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WPPCONNECT_SECRET_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "phone",   "value": "={{ $('Preparar Cierres').item.json.customer_phone }}" },
+            { "name": "message", "value": "=👋 Tu sesión fue cerrada por inactividad. ¡Cuando quieras hacer un pedido, escribinos!" },
+            { "name": "isGroup", "value": false }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-0003-0003-0003-000000000010",
+      "name": "Notificar Cierre",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 520]
     }
   ],
   "connections": {
@@ -125,19 +181,31 @@
       "main": [[{ "node": "Obtener Sesiones Inactivas", "type": "main", "index": 0 }]]
     },
     "Obtener Sesiones Inactivas": {
-      "main": [[{ "node": "¿Hay sesiones?", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Clasificar Sesiones", "type": "main", "index": 0 }]]
     },
-    "¿Hay sesiones?": {
+    "Clasificar Sesiones": {
+      "main": [[
+        { "node": "Preparar Recordatorios", "type": "main", "index": 0 },
+        { "node": "Preparar Cierres",       "type": "main", "index": 0 }
+      ]]
+    },
+    "Preparar Recordatorios": {
+      "main": [[{ "node": "Enviar Recordatorio", "type": "main", "index": 0 }]]
+    },
+    "Preparar Cierres": {
+      "main": [[{ "node": "Cerrar Sesión", "type": "main", "index": 0 }]]
+    },
+    "Cerrar Sesión": {
+      "main": [[{ "node": "¿Tiene Pedido Activo?", "type": "main", "index": 0 }]]
+    },
+    "¿Tiene Pedido Activo?": {
       "main": [
-        [{ "node": "Split Sesiones", "type": "main", "index": 0 }],
-        [{ "node": "Sin acción",     "type": "main", "index": 0 }]
+        [{ "node": "Descartar Pedido", "type": "main", "index": 0 }],
+        [{ "node": "Notificar Cierre", "type": "main", "index": 0 }]
       ]
     },
-    "Split Sesiones": {
-      "main": [[
-        { "node": "Enviar Recordatorio", "type": "main", "index": 0 },
-        { "node": "Cerrar Sesión",       "type": "main", "index": 0 }
-      ]]
+    "Descartar Pedido": {
+      "main": [[{ "node": "Notificar Cierre", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
@@ -146,7 +214,5 @@
     "saveDataSuccessExecution": "none"
   },
   "staticData": null,
-  "meta": {
-    "templateCredsSetupCompleted": true
-  }
+  "meta": { "templateCredsSetupCompleted": true }
 }

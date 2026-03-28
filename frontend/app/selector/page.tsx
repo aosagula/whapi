@@ -6,8 +6,8 @@
  */
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Store, ChevronRight, LogOut } from "lucide-react"
-import { api, ApiError, type ComercioResponse } from "@/lib/api"
+import { Store, ChevronRight, LogOut, Plus } from "lucide-react"
+import { api, ApiError, type ComercioResponse, type UserResponse } from "@/lib/api"
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Dueño",
@@ -20,13 +20,16 @@ const ROLE_LABELS: Record<string, string> = {
 export default function SelectorPage() {
   const router = useRouter()
   const [comercios, setComercios] = useState<ComercioResponse[]>([])
+  const [user, setUser] = useState<UserResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.comercios
-      .misComercio()
-      .then((res) => setComercios(res.comercios))
+    Promise.all([api.comercios.misComercio(), api.auth.me()])
+      .then(([res, me]) => {
+        setComercios(res.comercios)
+        setUser(me)
+      })
       .catch((err) => {
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           // Sin autenticar → redirigir al login
@@ -95,9 +98,38 @@ export default function SelectorPage() {
                 <Store className="w-8 h-8 text-brand" />
               </div>
               <p className="font-semibold text-brown mb-2">Todavía no tenés comercios</p>
-              <p className="text-brown-muted text-sm max-w-xs mx-auto">
-                Si sos dueño, podrás crear tu primer comercio. Si sos empleado, esperá a que el dueño te asocie a su comercio.
-              </p>
+              {user?.account_type === "owner" ? (
+                <>
+                  <p className="text-brown-muted text-sm max-w-xs mx-auto mb-5">
+                    Creá tu primer comercio para empezar a gestionar pedidos por WhatsApp.
+                  </p>
+                  <button
+                    onClick={() => router.push("/nuevo-comercio")}
+                    data-testid="btn-crear-comercio"
+                    className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Crear mi comercio
+                  </button>
+                </>
+              ) : (
+                <p className="text-brown-muted text-sm max-w-xs mx-auto">
+                  Esperá a que el dueño de un comercio te asocie para poder acceder al panel.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!loading && comercios.length > 0 && user?.account_type === "owner" && (
+            <div className="mb-4 flex justify-end">
+              <button
+                onClick={() => router.push("/nuevo-comercio")}
+                data-testid="btn-nuevo-comercio"
+                className="inline-flex items-center gap-1.5 text-sm text-brand font-medium hover:underline"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Nuevo comercio
+              </button>
             </div>
           )}
 

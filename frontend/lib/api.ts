@@ -15,10 +15,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
 
   const headers: Record<string, string> = {
@@ -36,6 +33,8 @@ async function request<T>(
     throw new ApiError(res.status, body?.detail ?? res.statusText)
   }
 
+  // 204 No Content
+  if (res.status === 204) return undefined as unknown as T
   return res.json() as Promise<T>
 }
 
@@ -65,12 +64,25 @@ export interface ComercioResponse {
   name: string
   address: string | null
   logo_url: string | null
+  half_half_surcharge: string
   is_active: boolean
   role: string
 }
 
 export interface MisComerciosResponse {
   comercios: ComercioResponse[]
+}
+
+export type RolComercio = "owner" | "admin" | "cashier" | "cook" | "delivery"
+
+export interface EmpleadoResponse {
+  user_id: string
+  name: string
+  email: string
+  phone: string | null
+  role: RolComercio
+  is_active: boolean
+  joined_at: string
 }
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -100,5 +112,41 @@ export const api = {
 
   comercios: {
     misComercio: () => request<MisComerciosResponse>("/comercios/mis-comercios"),
+
+    crear: (data: { name: string; address?: string; logo_url?: string }) =>
+      request<ComercioResponse>("/comercios", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    detalle: (id: string) => request<ComercioResponse>(`/comercios/${id}`),
+
+    editar: (id: string, data: Partial<{ name: string; address: string; logo_url: string; half_half_surcharge: number }>) =>
+      request<ComercioResponse>(`/comercios/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+  },
+
+  empleados: {
+    listar: (comercioId: string) =>
+      request<EmpleadoResponse[]>(`/comercios/${comercioId}/empleados`),
+
+    asociar: (comercioId: string, data: { email: string; role: RolComercio }) =>
+      request<EmpleadoResponse>(`/comercios/${comercioId}/empleados`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    cambiarRol: (comercioId: string, userId: string, role: RolComercio) =>
+      request<EmpleadoResponse>(`/comercios/${comercioId}/empleados/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      }),
+
+    darDeBaja: (comercioId: string, userId: string) =>
+      request<void>(`/comercios/${comercioId}/empleados/${userId}`, {
+        method: "DELETE",
+      }),
   },
 }

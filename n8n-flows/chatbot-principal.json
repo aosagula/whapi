@@ -1,0 +1,147 @@
+{
+  "name": "Chatbot Principal - Pizzería",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot-mensaje",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook Mensaje",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "transferred_human",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "¿HITL Activo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"hitl_active\", \"message\": \"Conversación derivada a humano\" }"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Ignorar (HITL)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 180]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_BASE_URL }}/pizzerias/{{ $json.pizzeria_id }}/conversaciones/{{ $json.session_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Obtener Contexto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 420]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "complete",
+        "modelId": { "__rl": true, "value": "gpt-4o-mini", "mode": "list" },
+        "messages": {
+          "values": [
+            {
+              "content": "Sos el asistente virtual de una pizzería. Ayudás a los clientes a hacer pedidos, consultar el menú y resolver dudas. Respondé siempre en español, de forma amable y concisa.",
+              "role": "system"
+            },
+            {
+              "content": "={{ $json.messages.map(m => m.role + ': ' + m.content).join('\\n') }}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": { "maxTokens": 500 }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "LLM - Generar Respuesta",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL }}/pizzerias/{{ $('Webhook Mensaje').item.json.pizzeria_id }}/conversaciones/{{ $('Webhook Mensaje').item.json.session_id }}/mensajes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "text", "value": "={{ $json.message.content }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000006",
+      "name": "Guardar Respuesta en API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"session_id\": \"{{ $('Webhook Mensaje').item.json.session_id }}\" }"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000007",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 420]
+    }
+  ],
+  "connections": {
+    "Webhook Mensaje": {
+      "main": [[{ "node": "¿HITL Activo?", "type": "main", "index": 0 }]]
+    },
+    "¿HITL Activo?": {
+      "main": [
+        [{ "node": "Ignorar (HITL)", "type": "main", "index": 0 }],
+        [{ "node": "Obtener Contexto", "type": "main", "index": 0 }]
+      ]
+    },
+    "Obtener Contexto": {
+      "main": [[{ "node": "LLM - Generar Respuesta", "type": "main", "index": 0 }]]
+    },
+    "LLM - Generar Respuesta": {
+      "main": [[{ "node": "Guardar Respuesta en API", "type": "main", "index": 0 }]]
+    },
+    "Guardar Respuesta en API": {
+      "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

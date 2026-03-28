@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -29,6 +29,7 @@ class Customer(Base, TimestampMixin):
     name: Mapped[str | None] = mapped_column(String(120))
     address: Mapped[str | None] = mapped_column(String(255))
     notes: Mapped[str | None] = mapped_column(Text)
+    has_whatsapp: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     pizzeria: Mapped[Pizzeria] = relationship(back_populates="customers")
     credit: Mapped[CustomerCredit | None] = relationship(

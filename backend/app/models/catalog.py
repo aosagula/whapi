@@ -52,6 +52,9 @@ class CatalogItem(Base, TimestampMixin):
     """Precio y variante de un producto en el catálogo de la pizzería."""
 
     __tablename__ = "catalog_items"
+    __table_args__ = (
+        UniqueConstraint("pizzeria_id", "product_id", "size", name="uq_catalog_item_product_size"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     pizzeria_id: Mapped[int] = mapped_column(ForeignKey("pizzerias.id"), nullable=False)
@@ -69,13 +72,19 @@ class Combo(Base, TimestampMixin, SoftDeleteMixin):
     """Agrupación de productos con precio especial."""
 
     __tablename__ = "combos"
+    __table_args__ = (
+        UniqueConstraint("pizzeria_id", "code", name="uq_combo_pizzeria_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     pizzeria_id: Mapped[int] = mapped_column(ForeignKey("pizzerias.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(30), nullable=False)
+    short_name: Mapped[str] = mapped_column(String(30), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_customizable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     items: Mapped[list[ComboItem]] = relationship(back_populates="combo")
 
@@ -106,8 +115,11 @@ class PizzeriaConfig(Base):
     half_half_surcharge: Mapped[float] = mapped_column(
         Numeric(10, 2), default=0, nullable=False
     )
+    delivery_surcharge: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     welcome_message: Mapped[str | None] = mapped_column(Text)
+    closing_message: Mapped[str | None] = mapped_column(Text)
     opening_time: Mapped[str | None] = mapped_column(String(5))   # "HH:MM"
     closing_time: Mapped[str | None] = mapped_column(String(5))   # "HH:MM"
+    bank_details: Mapped[str | None] = mapped_column(Text)
 
     pizzeria: Mapped[Pizzeria] = relationship(back_populates="config")

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.base import TimestampMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
-    from app.models.account import Pizzeria
+    from app.models.account import Pizzeria, PanelUser
     from app.models.customer import Customer
     from app.models.whatsapp import WhatsAppNumber
 
@@ -19,6 +20,11 @@ class OrderOrigin(str, enum.Enum):
     whatsapp = "whatsapp"
     phone = "phone"
     operator = "operator"
+
+
+class DeliveryType(str, enum.Enum):
+    delivery = "delivery"
+    pickup = "pickup"
 
 
 class OrderStatus(str, enum.Enum):
@@ -67,6 +73,10 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
         default=OrderStatus.in_progress,
         nullable=False,
     )
+    delivery_type: Mapped[DeliveryType | None] = mapped_column(
+        Enum(DeliveryType, name="delivery_type"), nullable=True
+    )
+    delivery_address: Mapped[str | None] = mapped_column(String(255))
     total: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
 
@@ -87,6 +97,12 @@ class OrderItem(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False)
     product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     combo_id: Mapped[int | None] = mapped_column(ForeignKey("combos.id"), nullable=True)
+    # Tamaño de la pizza (large/small); null para empanadas y bebidas
+    size: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Segundo gusto para pedidos mitad y mitad
+    second_product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id"), nullable=True
+    )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
@@ -127,5 +143,15 @@ class Incident(Base, TimestampMixin):
     type: Mapped[str] = mapped_column(String(60), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     is_resolved: Mapped[bool] = mapped_column(default=False, nullable=False)
+    reported_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("panel_users.id"), nullable=True
+    )
+    resolved_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("panel_users.id"), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_notes: Mapped[str | None] = mapped_column(Text)
 
     order: Mapped[Order] = relationship(back_populates="incidents")
+    reported_by: Mapped[PanelUser | None] = relationship(foreign_keys=[reported_by_id])
+    resolved_by: Mapped[PanelUser | None] = relationship(foreign_keys=[resolved_by_id])

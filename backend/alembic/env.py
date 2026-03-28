@@ -9,9 +9,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Importar settings y Base para que Alembic detecte los modelos
+# Importar settings y todos los modelos para que Alembic genere el schema completo
 from app.core.config import settings
-from app.core.db import Base  # noqa: F401 — importar aquí para registrar los modelos
+from app.core.db import Base
+import app.models  # noqa: F401 — registra todas las clases en Base.metadata
 
 config = context.config
 

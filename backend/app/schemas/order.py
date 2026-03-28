@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.order import OrderOrigin, OrderStatus, PaymentMethod, PaymentStatus
+from app.models.order import DeliveryType, OrderOrigin, OrderStatus, PaymentMethod, PaymentStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -12,6 +12,10 @@ class OrderItemCreate(BaseModel):
 
     product_id: int | None = None
     combo_id: int | None = None
+    # Tamaño de pizza: 'large' o 'small'. Null para empanadas y bebidas.
+    size: str | None = None
+    # Segundo producto para pedidos mitad y mitad (solo cuando hay product_id)
+    second_product_id: int | None = None
     quantity: int = 1
     unit_price: float
     notes: str | None = None
@@ -22,6 +26,8 @@ class OrderItemRead(BaseModel):
     order_id: int
     product_id: int | None
     combo_id: int | None
+    size: str | None
+    second_product_id: int | None
     quantity: int
     unit_price: float
     notes: str | None
@@ -34,6 +40,8 @@ class OrderCreate(BaseModel):
 
     customer_id: int
     origin: OrderOrigin
+    delivery_type: DeliveryType | None = None
+    delivery_address: str | None = None
     whatsapp_number_id: int | None = None
     notes: str | None = None
     items: list[OrderItemCreate] = []
@@ -48,6 +56,8 @@ class OrderRead(BaseModel):
     whatsapp_number_id: int | None
     origin: OrderOrigin
     status: OrderStatus
+    delivery_type: DeliveryType | None
+    delivery_address: str | None
     total: float
     notes: str | None
     created_at: datetime
@@ -91,6 +101,12 @@ class IncidentCreate(BaseModel):
     description: str | None = None
 
 
+class IncidentResolve(BaseModel):
+    """Datos de resolución de una incidencia."""
+
+    resolution_notes: str | None = None
+
+
 class IncidentRead(BaseModel):
     id: int
     order_id: int
@@ -98,6 +114,10 @@ class IncidentRead(BaseModel):
     type: str
     description: str | None
     is_resolved: bool
+    reported_by_id: int | None
+    resolved_by_id: int | None
+    resolved_at: datetime | None
+    resolution_notes: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

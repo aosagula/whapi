@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.models.conversation import ChatSession, ChatSessionStatus
 from app.models.customer import Customer
-from app.models.order import Payment, PaymentStatus
+from app.models.order import Order, OrderStatus, Payment, PaymentStatus
 from app.models.whatsapp import WhatsAppNumber, WhatsAppSessionStatus
 from app.schemas.webhooks import (
     MercadoPagoWebhookPayload,
@@ -232,6 +232,16 @@ async def mercadopago_webhook(
     # En un flujo real consultaríamos la API de MP para confirmar el estado.
     # Por ahora marcamos como confirmado al recibir el webhook.
     payment.status = PaymentStatus.confirmed
+
+    # Transicionar el pedido a pending_preparation si estaba en pendiente_pago
+    order_result = await db.execute(
+        select(Order).where(Order.id == payment.order_id)
+    )
+    order = order_result.scalar_one_or_none()
+    if order and order.status == OrderStatus.pending_payment:
+        order.status = OrderStatus.pending_preparation
+        logger.info("Pedido %s → pending_preparation (pago MP confirmado)", order.id)
+
     await db.commit()
 
     logger.info("Pago %s confirmado vía MercadoPago webhook", payment.id)

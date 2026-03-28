@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import exists, select
 
 from app.core.deps import (
@@ -433,6 +434,13 @@ async def delete_combo(
 # Combo Items (productos dentro de un combo)
 # ---------------------------------------------------------------------------
 
+class ComboItemAdd(BaseModel):
+    """Producto a agregar a un combo."""
+
+    product_id: int
+    quantity: int = 1
+
+
 @router.post(
     "/pizzerias/{pizzeria_id}/combos/{combo_id}/items",
     status_code=status.HTTP_201_CREATED,
@@ -440,8 +448,7 @@ async def delete_combo(
 async def add_combo_item(
     pizzeria_id: int,
     combo_id: int,
-    product_id: int,
-    quantity: int,
+    body: ComboItemAdd,
     active_pid: ActivePizzeriaId,
     _: OwnerOrAdminRequired,
     db: DBSession,
@@ -451,19 +458,19 @@ async def add_combo_item(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado")
 
     await _get_combo(combo_id, active_pid, db)
-    await _get_product(product_id, active_pid, db)
+    await _get_product(body.product_id, active_pid, db)
 
-    if quantity < 1:
+    if body.quantity < 1:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="La cantidad debe ser al menos 1",
         )
 
-    combo_item = ComboItem(combo_id=combo_id, product_id=product_id, quantity=quantity)
+    combo_item = ComboItem(combo_id=combo_id, product_id=body.product_id, quantity=body.quantity)
     db.add(combo_item)
     await db.commit()
     await db.refresh(combo_item)
-    return {"id": combo_item.id, "combo_id": combo_id, "product_id": product_id, "quantity": quantity}
+    return {"id": combo_item.id, "combo_id": combo_id, "product_id": body.product_id, "quantity": body.quantity}
 
 
 @router.delete(

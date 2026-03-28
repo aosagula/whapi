@@ -6,16 +6,18 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import (
     ActivePizzeriaId,
+    CurrentAccount,
     DBSession,
     OwnerOrAdminRequired,
     TokenPayloadDep,
 )
 from app.models.catalog import CatalogItem, Combo, Product
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerCredit
 from app.models.order import Incident, Order, OrderItem, OrderStatus, Payment, PaymentStatus
 from app.schemas.order import (
     IncidentCreate,
     IncidentRead,
+    IncidentResolve,
     OrderCreate,
     OrderRead,
     OrderStatusUpdate,
@@ -199,6 +201,8 @@ async def create_order(
         customer_id=body.customer_id,
         whatsapp_number_id=body.whatsapp_number_id,
         origin=body.origin,
+        delivery_type=body.delivery_type,
+        delivery_address=body.delivery_address,
         notes=body.notes,
         status=OrderStatus.in_progress,
         total=0,
@@ -212,6 +216,8 @@ async def create_order(
             order_id=order.id,
             product_id=item_data.product_id,
             combo_id=item_data.combo_id,
+            size=item_data.size,
+            second_product_id=item_data.second_product_id,
             quantity=item_data.quantity,
             unit_price=item_data.unit_price,
             notes=item_data.notes,
@@ -299,6 +305,33 @@ async def update_order_status(
         )
 
     _validate_transition(order.status, body.status)
+
+    # Lógica de crédito: si hay pago confirmado, acreditar el monto al cliente
+    if body.status == OrderStatus.cancelled:
+        confirmed_payment = await db.execute(
+            select(Payment).where(
+                Payment.order_id == order_id,
+                Payment.status == PaymentStatus.confirmed,
+            )
+        )
+        paid = confirmed_payment.scalar_one_or_none()
+        if paid is not None:
+            credit_result = await db.execute(
+                select(CustomerCredit).where(
+                    CustomerCredit.customer_id == order.customer_id,
+                    CustomerCredit.pizzeria_id == active_pid,
+                )
+            )
+            credit = credit_result.scalar_one_or_none()
+            if credit is None:
+                credit = CustomerCredit(
+                    customer_id=order.customer_id,
+                    pizzeria_id=active_pid,
+                    balance=0,
+                )
+                db.add(credit)
+                await db.flush()
+            credit.balance = float(credit.balance) + float(order.total)
 
     order.status = body.status
     await db.commit()
@@ -456,11 +489,15 @@ async def resolve_incident(
     pizzeria_id: int,
     order_id: int,
     incident_id: int,
+    body: IncidentResolve,
     active_pid: ActivePizzeriaId,
+    current_account: CurrentAccount,
     _: OwnerOrAdminRequired,
     db: DBSession,
 ) -> IncidentRead:
-    """Marca una incidencia como resuelta."""
+    """Marca una incidencia como resuelta, registrando quién y cuándo la resolvió."""
+    from datetime import datetime, timezone
+
     if pizzeria_id != active_pid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado")
 
@@ -480,6 +517,9 @@ async def resolve_incident(
         )
 
     incident.is_resolved = True
+    incident.resolved_by_id = current_account.id
+    incident.resolved_at = datetime.now(timezone.utc)
+    incident.resolution_notes = body.resolution_notes
     await db.commit()
     await db.refresh(incident)
     return IncidentRead.model_validate(incident)

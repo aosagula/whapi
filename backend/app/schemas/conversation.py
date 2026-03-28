@@ -40,6 +40,19 @@ class ChatSessionDetail(BaseModel):
     updated_at: datetime
 
 
+class InactiveSessionRead(BaseModel):
+    """Sesión inactiva devuelta por el endpoint de inactividad (usado por n8n)."""
+
+    id: int
+    pizzeria_id: int
+    customer_id: int
+    whatsapp_session_name: str
+    status: ChatSessionStatus
+    last_message_at: datetime | None
+    active_order_id: int | None
+    updated_at: datetime
+
+
 class ChatSessionStatusUpdate(BaseModel):
     """Cambio de estado de una sesión (ej: derivar a humano)."""
 

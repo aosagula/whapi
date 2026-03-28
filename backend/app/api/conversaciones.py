@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.deps import ActivePizzeriaId, DBSession, OwnerOrAdminRequired
 from app.models.conversation import ChatSession, ChatSessionStatus
 from app.models.customer import Customer
+from app.models.order import Order, OrderStatus
 from app.models.whatsapp import WhatsAppNumber
 from app.schemas.conversation import (
     ChatSessionDetail,
     ChatSessionRead,
     ChatSessionStatusUpdate,
+    InactiveSessionRead,
     SendMessageRequest,
 )
 
@@ -246,6 +249,93 @@ async def send_message(
     await db.refresh(session)
 
     return _build_detail(session, cust, wa)
+
+
+# ---------------------------------------------------------------------------
+# Endpoint de sesiones inactivas (para n8n)
+# ---------------------------------------------------------------------------
+
+_TERMINAL_STATUSES = {
+    OrderStatus.cancelled,
+    OrderStatus.delivered,
+    OrderStatus.discarded,
+}
+
+
+def _verify_webhook_token(token: str = Query(..., alias="token")) -> None:
+    """Valida el token de la query string para endpoints internos."""
+    if not settings.webhook_token or token != settings.webhook_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
+
+@router.get("/conversaciones/inactivas", response_model=list[InactiveSessionRead])
+async def list_inactive_sessions(
+    db: DBSession,
+    _: None = Depends(_verify_webhook_token),
+    minutos_inactiva: int = Query(10, ge=1),
+    session_status: ChatSessionStatus = Query(ChatSessionStatus.active, alias="status"),
+    include_hitl: bool = Query(True),
+) -> list[InactiveSessionRead]:
+    """
+    Lista sesiones inactivas desde hace al menos `minutos_inactiva` minutos.
+    Usado por n8n para el flujo de inactividad.
+    - `status`: filtra por estado de la sesión (default: active)
+    - `include_hitl=false`: excluye sesiones en waiting_human / transferred_human
+    """
+    threshold = datetime.now(timezone.utc) - timedelta(minutes=minutos_inactiva)
+
+    stmt = select(ChatSession, WhatsAppNumber).join(
+        WhatsAppNumber, WhatsAppNumber.id == ChatSession.whatsapp_number_id
+    ).where(
+        ChatSession.status == session_status,
+    )
+
+    if not include_hitl:
+        stmt = stmt.where(
+            ChatSession.status.notin_([
+                ChatSessionStatus.waiting_human,
+                ChatSessionStatus.transferred_human,
+            ])
+        )
+
+    # Filtrar por inactividad: inactive_at o updated_at superan el umbral
+    from sqlalchemy import or_, func
+    stmt = stmt.where(
+        or_(
+            ChatSession.inactive_at <= threshold,
+            ChatSession.updated_at <= threshold,
+        )
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    output: list[InactiveSessionRead] = []
+    for session, wa_number in rows:
+        # Buscar pedido activo del cliente en esa pizzería
+        order_result = await db.execute(
+            select(Order.id).where(
+                Order.customer_id == session.customer_id,
+                Order.pizzeria_id == session.pizzeria_id,
+                Order.status.notin_(list(_TERMINAL_STATUSES)),
+            ).order_by(Order.created_at.desc()).limit(1)
+        )
+        active_order_id = order_result.scalar_one_or_none()
+
+        output.append(
+            InactiveSessionRead(
+                id=session.id,
+                pizzeria_id=session.pizzeria_id,
+                customer_id=session.customer_id,
+                whatsapp_session_name=wa_number.session_name,
+                status=session.status,
+                last_message_at=session.inactive_at,
+                active_order_id=active_order_id,
+                updated_at=session.updated_at,
+            )
+        )
+
+    return output
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,9 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      # Dentro del contenedor, localhost no llega al host; se usa host.docker.internal
+      - POSTGRES_HOST=host.docker.internal
     volumes:
       - ./backend:/app
     # Permite al contenedor alcanzar servicios del host (PostgreSQL, n8n, WPPConnect)

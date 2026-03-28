@@ -53,6 +53,7 @@ export default function PizzeriaLayout({
             <NavLink href={`/${pizzeriaId}/menu`}>Menú</NavLink>
             <NavLink href={`/${pizzeriaId}/clientes`}>Clientes</NavLink>
             <NavLink href={`/${pizzeriaId}/conversaciones`}>Conversaciones</NavLink>
+            <NavLink href={`/${pizzeriaId}/configuracion`}>Configuración</NavLink>
           </nav>
 
           <div className="flex items-center gap-3">

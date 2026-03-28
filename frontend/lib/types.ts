@@ -53,6 +53,34 @@ export interface PizzeriaConfig {
 }
 
 // ---------------------------------------------------------------------------
+// WhatsApp & Empleados
+// ---------------------------------------------------------------------------
+
+export type WhatsAppSessionStatus = "connected" | "disconnected" | "scanning_qr";
+
+export interface WhatsAppNumber {
+  id: number;
+  pizzeria_id: number;
+  number: string;
+  session_name: string;
+  status: WhatsAppSessionStatus;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type PizzeriaRole = "admin" | "cajero" | "cocinero" | "repartidor";
+
+export interface Empleado {
+  id: number;
+  account_id: number;
+  name: string;
+  email: string;
+  is_active: boolean;
+  role: PizzeriaRole;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Conversaciones
 // ---------------------------------------------------------------------------
 

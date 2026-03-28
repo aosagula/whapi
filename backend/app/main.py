@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import app.models  # noqa: F401 — registra todos los mappers de SQLAlchemy
 from app.api.auth import router as auth_router
+from app.api.catalogo import router as catalogo_router
 from app.api.comercios import router as comercios_router
 from app.api.empleados import router as empleados_router
 from app.api.health import router as health_router
@@ -29,3 +31,4 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(comercios_router)
 app.include_router(empleados_router)
+app.include_router(catalogo_router)

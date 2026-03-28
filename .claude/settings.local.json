@@ -18,7 +18,15 @@
       "Bash(python:*)",
       "Bash(pip show:*)",
       "Bash(npx create-next-app@14 frontend --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --no-turbopack)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run:*)",
+      "Bash(echo $POSTGRES_PORT)",
+      "Bash(echo $POSTGRES_HOST)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist:*)",
+      "Bash(npx playwright:*)"
     ]
   }
 }

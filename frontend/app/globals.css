@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream: #fdf6ee;
+  --orange: #e85d04;
+  --orange-light: #fb923c;
+  --brown: #1c1208;
+  --border: #e8d5c4;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--brown);
+  font-family: "DM Sans", system-ui, sans-serif;
+}
+
+/* Clases utilitarias del prototipo */
+@layer components {
+  .btn-primary {
+    @apply bg-brand text-white font-bold px-6 py-3 rounded-full border-none cursor-pointer transition-all duration-200 text-sm font-sans;
+  }
+  .btn-primary:hover {
+    @apply bg-[#c94e03] -translate-y-px shadow-[0_8px_24px_rgba(232,93,4,0.28)];
+  }
+  .btn-outline {
+    @apply bg-transparent text-brown border-2 border-border px-6 py-3 rounded-full cursor-pointer transition-all duration-200 text-sm font-semibold font-sans;
+  }
+  .btn-outline:hover {
+    @apply border-brand text-brand;
+  }
+  .card {
+    @apply bg-white rounded-2xl border border-border;
+  }
+}

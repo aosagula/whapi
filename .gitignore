@@ -1,35 +1,41 @@
+# Entorno y secretos
+.env
+*.env.local
+
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
 .venv/
 venv/
-.env
-*.egg-info/
 dist/
 build/
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+htmlcov/
+.coverage
 
-# Alembic
-# (versions se commitean)
-
-# Node
+# Node / Next.js
 node_modules/
 .next/
-*.local
+out/
+frontend/.turbo/
 .npm/
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
 
 # Docker
 .docker/
 
-# IDE
-.idea/
+# IDEs
 .vscode/
+.idea/
 *.swp
 
-# OS
+# Sistema operativo
 .DS_Store
 Thumbs.db
-

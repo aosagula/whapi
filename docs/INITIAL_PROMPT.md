@@ -5,9 +5,9 @@
 Vas a construir **Whapi**, una plataforma SaaS multi-tenant que permite a dueños de comercios gastronómicos gestionar pedidos recibidos por WhatsApp, con panel web para su equipo y chatbot conversacional con LLM.
 
 Leé estos dos archivos completos antes de hacer cualquier cosa:
-- `docs/especificacion-chatbot-pizzeria.md` — especificación funcional del sistema (v1.8)
 - `CLAUDE.md` — stack, convenciones, modelo de navegación, UX y orden de fases
-
+- `docs/especificacion-chatbot-pizzeria-v1.8.md` — especificación funcional del sistema (v1.8)
+- prototipo en el archivo `docs/whapi-opcion-b-v2.html`
 ---
 
 ## Qué es Whapi

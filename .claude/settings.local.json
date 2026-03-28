@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -c \"import fastapi, sqlalchemy, alembic, asyncpg; print\\(''OK''\\)\")",
+      "Bash(python -m dotenv -f ../.env run -- alembic upgrade head)",
+      "Bash(python -c \"import psycopg2; print\\(''psycopg2 OK''\\)\")",
+      "Bash(pip uninstall:*)",
+      "Bash(python -c \"import psycopg2; print\\(''''psycopg2 OK''''\\)\")",
+      "Bash(set POSTGRES_HOST=localhost)",
+      "Bash(set POSTGRES_PORT=5433)",
+      "Bash(set POSTGRES_USER=whapi_user)",
+      "Bash(set POSTGRES_PASSWORD=Us3eWhapi123)",
+      "Bash(set POSTGRES_DB=whapi_db)",
+      "Bash(alembic upgrade:*)",
+      "Bash(PGPASSWORD=Us3eWhapi123 psql -h localhost -p 5433 -U whapi_user -d whapi_db -c \"SELECT * FROM alembic_version;\" 2>&1)",
+      "Bash(python -c \":*)",
+      "Bash(python:*)",
+      "Bash(pip show:*)",
+      "Bash(npx create-next-app@14 frontend --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --no-turbopack)",
+      "Bash(npm test:*)"
+    ]
+  }
+}

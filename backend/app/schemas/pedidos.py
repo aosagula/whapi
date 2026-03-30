@@ -75,6 +75,8 @@ class OrderCreate(BaseModel):
     payment_status: str = "no_charge"
     total_amount: float = Field(ge=0)
     credit_applied: float = Field(ge=0, default=0)
+    kitchen_notes: str | None = None
+    delivery_notes: str | None = None
     items: list[OrderItemCreate]
 
 
@@ -124,6 +126,8 @@ class OrderResponse(BaseModel):
     credit_applied: float
     delivery_person_id: uuid.UUID | None
     internal_notes: str | None
+    kitchen_notes: str | None
+    delivery_notes: str | None
     created_by: uuid.UUID | None
     created_at: datetime
     updated_at: datetime

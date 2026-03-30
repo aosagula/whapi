@@ -305,6 +305,8 @@ export const api = {
         payment_status: string
         total_amount: number
         credit_applied?: number
+        kitchen_notes?: string | null
+        delivery_notes?: string | null
         items: {
           product_id?: string | null
           combo_id?: string | null
@@ -493,6 +495,8 @@ export interface OrderResponse {
   credit_applied: number
   delivery_person_id: string | null
   internal_notes: string | null
+  kitchen_notes: string | null
+  delivery_notes: string | null
   created_by: string | null
   created_at: string
   updated_at: string

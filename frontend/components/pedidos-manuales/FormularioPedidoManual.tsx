@@ -297,11 +297,13 @@ interface Paso2Props {
   comercioId: string
   cart: CartItem[]
   onChange: (cart: CartItem[]) => void
+  kitchenNotes: string
+  onKitchenNotesChange: (v: string) => void
   onNext: () => void
   onBack: () => void
 }
 
-function Paso2Pedido({ comercioId, cart, onChange, onNext, onBack }: Paso2Props) {
+function Paso2Pedido({ comercioId, cart, onChange, kitchenNotes, onKitchenNotesChange, onNext, onBack }: Paso2Props) {
   const [products, setProducts] = useState<ProductResponse[]>([])
   const [combos, setCombos] = useState<ComboResponse[]>([])
   const [activeTab, setActiveTab] = useState<"pizza" | "empanada" | "drink" | "combo">("pizza")
@@ -457,6 +459,18 @@ function Paso2Pedido({ comercioId, cart, onChange, onNext, onBack }: Paso2Props)
         </div>
       )}
 
+      {/* Notas de preparación para la cocina */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Notas de preparación (opcional)</label>
+        <textarea
+          value={kitchenNotes}
+          onChange={e => onKitchenNotesChange(e.target.value)}
+          placeholder="Ej: sin cebolla, extra salsa, alergias..."
+          rows={2}
+          className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+        />
+      </div>
+
       <div className="flex gap-2 pt-2">
         <button onClick={onBack} className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Atrás</button>
         <button
@@ -477,12 +491,14 @@ interface Paso3Props {
   deliveryType: DeliveryType
   deliveryAddress: string
   defaultAddress: string
+  deliveryNotes: string
   onChange: (type: DeliveryType, address: string) => void
+  onDeliveryNotesChange: (v: string) => void
   onNext: () => void
   onBack: () => void
 }
 
-function Paso3Entrega({ deliveryType, deliveryAddress, defaultAddress, onChange, onNext, onBack }: Paso3Props) {
+function Paso3Entrega({ deliveryType, deliveryAddress, defaultAddress, deliveryNotes, onChange, onDeliveryNotesChange, onNext, onBack }: Paso3Props) {
   const addressValue = deliveryType === "delivery" ? deliveryAddress : ""
   const canContinue = deliveryType === "pickup" || deliveryAddress.trim().length > 0
 
@@ -528,6 +544,18 @@ function Paso3Entrega({ deliveryType, deliveryAddress, defaultAddress, onChange,
           )}
         </div>
       )}
+
+      {/* Notas para el repartidor */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Notas de entrega (opcional)</label>
+        <textarea
+          value={deliveryNotes}
+          onChange={e => onDeliveryNotesChange(e.target.value)}
+          placeholder="Ej: timbre roto, 3er piso sin ascensor, dejar en portería..."
+          rows={2}
+          className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+        />
+      </div>
 
       <div className="flex gap-2 pt-2">
         <button onClick={onBack} className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">Atrás</button>
@@ -593,6 +621,8 @@ interface Paso5Props {
   cart: CartItem[]
   deliveryType: DeliveryType
   deliveryAddress: string
+  kitchenNotes: string
+  deliveryNotes: string
   paymentMethod: PaymentMethod
   onConfirm: () => Promise<void>
   onBack: () => void
@@ -600,7 +630,7 @@ interface Paso5Props {
   error: string | null
 }
 
-function Paso5Confirmacion({ cliente, cart, deliveryType, deliveryAddress, paymentMethod, onConfirm, onBack, submitting, error }: Paso5Props) {
+function Paso5Confirmacion({ cliente, cart, deliveryType, deliveryAddress, kitchenNotes, deliveryNotes, paymentMethod, onConfirm, onBack, submitting, error }: Paso5Props) {
   const paymentLabel = PAYMENT_OPTIONS.find(o => o.value === paymentMethod)?.label ?? paymentMethod
 
   return (
@@ -637,6 +667,18 @@ function Paso5Confirmacion({ cliente, cart, deliveryType, deliveryAddress, payme
             <p className="font-medium">{paymentLabel}</p>
           </div>
         </div>
+
+        {/* Notas */}
+        {(kitchenNotes || deliveryNotes) && (
+          <div className="p-3 space-y-1 text-sm">
+            {kitchenNotes && (
+              <p className="text-gray-600"><span className="font-medium text-gray-500">Cocina:</span> {kitchenNotes}</p>
+            )}
+            {deliveryNotes && (
+              <p className="text-gray-600"><span className="font-medium text-gray-500">Entrega:</span> {deliveryNotes}</p>
+            )}
+          </div>
+        )}
 
         {/* Items */}
         <div className="p-3 space-y-1">
@@ -686,6 +728,8 @@ export default function FormularioPedidoManual({ comercioId, onPedidoCreado }: P
   const [cart, setCart] = useState<CartItem[]>([])
   const [deliveryType, setDeliveryType] = useState<DeliveryType>("delivery")
   const [deliveryAddress, setDeliveryAddress] = useState("")
+  const [kitchenNotes, setKitchenNotes] = useState("")
+  const [deliveryNotes, setDeliveryNotes] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash")
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -719,6 +763,8 @@ export default function FormularioPedidoManual({ comercioId, onPedidoCreado }: P
         payment_status: paymentStatus,
         total_amount: cartTotal(cart),
         credit_applied: 0,
+        kitchen_notes: kitchenNotes.trim() || null,
+        delivery_notes: deliveryNotes.trim() || null,
         items: cart.map(item => ({
           product_id: item.type === "product" ? item.id : null,
           combo_id: item.type === "combo" ? item.id : null,
@@ -743,6 +789,8 @@ export default function FormularioPedidoManual({ comercioId, onPedidoCreado }: P
     setCart([])
     setDeliveryType("delivery")
     setDeliveryAddress("")
+    setKitchenNotes("")
+    setDeliveryNotes("")
     setPaymentMethod("cash")
     setSuccess(null)
     setSubmitError(null)
@@ -783,6 +831,8 @@ export default function FormularioPedidoManual({ comercioId, onPedidoCreado }: P
           comercioId={comercioId}
           cart={cart}
           onChange={setCart}
+          kitchenNotes={kitchenNotes}
+          onKitchenNotesChange={setKitchenNotes}
           onNext={() => setStep(3)}
           onBack={() => setStep(1)}
         />
@@ -793,7 +843,9 @@ export default function FormularioPedidoManual({ comercioId, onPedidoCreado }: P
           deliveryType={deliveryType}
           deliveryAddress={deliveryAddress}
           defaultAddress={cliente?.address ?? ""}
+          deliveryNotes={deliveryNotes}
           onChange={handleDeliveryChange}
+          onDeliveryNotesChange={setDeliveryNotes}
           onNext={() => setStep(4)}
           onBack={() => setStep(2)}
         />
@@ -814,6 +866,8 @@ export default function FormularioPedidoManual({ comercioId, onPedidoCreado }: P
           cart={cart}
           deliveryType={deliveryType}
           deliveryAddress={deliveryAddress}
+          kitchenNotes={kitchenNotes}
+          deliveryNotes={deliveryNotes}
           paymentMethod={paymentMethod}
           onConfirm={handleConfirm}
           onBack={() => setStep(4)}

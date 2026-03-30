@@ -219,6 +219,24 @@ export default function PedidoDetalle({ pedido, comercioId, userRole, onClose, o
             </ol>
           </section>
 
+          {/* Notas de preparación y entrega (solo lectura, cargadas al crear el pedido) */}
+          {(pedido.kitchen_notes || pedido.delivery_notes) && (
+            <section className="space-y-1">
+              {pedido.kitchen_notes && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
+                  <p className="text-xs font-semibold text-amber-700 mb-0.5">Notas de preparación</p>
+                  <p className="text-amber-900">{pedido.kitchen_notes}</p>
+                </div>
+              )}
+              {pedido.delivery_notes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+                  <p className="text-xs font-semibold text-blue-700 mb-0.5">Notas de entrega</p>
+                  <p className="text-blue-900">{pedido.delivery_notes}</p>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Notas internas */}
           <section>
             <h3 className="text-sm font-semibold text-gray-700 mb-1">Notas internas</h3>

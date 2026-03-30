@@ -126,6 +126,10 @@ class Order(Base):
     )
     # Notas internas del equipo (no visibles al cliente)
     internal_notes: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    # Instrucciones para la cocina (alergias, especificaciones de preparación)
+    kitchen_notes: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    # Instrucciones para el repartidor (timbre, piso, referencia de dirección)
+    delivery_notes: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     # Operador que creó el pedido (solo en pedidos telefónicos/operador)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         sa.UUID(as_uuid=True),

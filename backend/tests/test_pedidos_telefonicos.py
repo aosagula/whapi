@@ -222,7 +222,7 @@ async def test_crear_pedido_telefonico_origin_phone():
         assert resp.status_code == 201
         data = resp.json()
         assert data["origin"] == "phone"
-        assert data["status"] == "pending_preparation"
+        assert data["status"] == "in_preparation"
         assert data["payment_status"] == "cash_on_delivery"
         assert data["delivery_type"] == "delivery"
         assert len(data["items"]) == 1

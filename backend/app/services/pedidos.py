@@ -185,6 +185,8 @@ async def _build_order_response(db: AsyncSession, order: Order) -> OrderResponse
         credit_applied=float(order.credit_applied),
         delivery_person_id=order.delivery_person_id,
         internal_notes=order.internal_notes,
+        kitchen_notes=order.kitchen_notes,
+        delivery_notes=order.delivery_notes,
         created_by=order.created_by,
         created_at=order.created_at,
         updated_at=order.updated_at,
@@ -322,17 +324,22 @@ async def crear_pedido(
 
     order_number = await _siguiente_order_number(db, business_id)
 
+    # Los pedidos telefónicos entran directo a preparación (ya son aceptados al crearse)
+    initial_status = "in_preparation" if data.origin == "phone" else "pending_preparation"
+
     order = Order(
         business_id=business_id,
         order_number=order_number,
         customer_id=data.customer_id,
-        status="pending_preparation",
+        status=initial_status,
         payment_status=data.payment_status,
         origin=data.origin,
         delivery_type=data.delivery_type,
         delivery_address=data.delivery_address,
         total_amount=data.total_amount,
         credit_applied=data.credit_applied,
+        kitchen_notes=data.kitchen_notes,
+        delivery_notes=data.delivery_notes,
         created_by=created_by_id,
     )
     db.add(order)
@@ -352,9 +359,10 @@ async def crear_pedido(
         db.add(item)
 
     # Primer entrada en el historial
+    hist_note = "Pedido telefónico — en preparación" if data.origin == "phone" else "Pedido creado por operador"
     await _registrar_historial(
-        db, order, "pending_preparation", changed_by_id=created_by_id,
-        note="Pedido creado por operador"
+        db, order, initial_status, changed_by_id=created_by_id,
+        note=hist_note
     )
 
     await db.commit()

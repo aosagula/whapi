@@ -73,3 +73,13 @@ Al confirmar se llama `POST /comercios/{id}/pedidos` con `origin: "phone"`.
 
 ### Pre-carga de dirección del cliente
 Si el cliente ya tiene dirección guardada, se pre-carga automáticamente en el paso de entrega. El operador puede usar la guardada o sobreescribir.
+
+### Estado inicial de pedidos telefónicos: `in_preparation`
+Los pedidos creados con `origin: "phone"` se crean directamente en estado `in_preparation`, saltando `pending_preparation`. Razón: el operador que toma el llamado ya actúa como "aceptador" del pedido. El historial registra la entrada con la nota "Pedido telefónico — en preparación". Los pedidos `operator` o `whatsapp` siguen entrando en `pending_preparation`.
+
+### Notas de preparación y entrega en pedidos
+Se agregaron dos campos opcionales al modelo `Order`:
+- `kitchen_notes: TEXT nullable` — instrucciones para la cocina (alergias, especificaciones). Se carga en el paso 2 del wizard.
+- `delivery_notes: TEXT nullable` — instrucciones para el repartidor (timbre, piso, referencia). Se carga en el paso 3 del wizard.
+
+Ambos campos se muestran en el resumen del paso 5 (confirmación) y en el panel de detalle del pedido en el kanban (amber para cocina, azul para entrega). Son de solo lectura en el detalle — se definen al crear el pedido. Migración: `0003_agregar_notas_cocina_entrega.py`.

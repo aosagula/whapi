@@ -152,8 +152,9 @@ OPENAI_API_KEY=
 2. **Commit antes de cambios grandes**: schema, refactors, inicio de módulo nuevo
 3. **Un módulo a la vez**: no avanzar al siguiente hasta que el actual esté funcionando
 4. **Tests por fase**: cada fase incluye tests de backend (`pytest`), tests de componentes (Testing Library) y tests de navegación E2E (Playwright MCP); todos deben pasar antes del checkpoint
-5. **Checkpoint al final de cada fase**: ver protocolo en `docs/CLAUDE.md`
-6. **Git**: mensajes en español, en infinitivo
+5. **Documentar specs adicionales**: toda funcionalidad agregada o decisión de diseño que no esté en la spec original debe quedar registrada en `additional_specs.md` en la raíz del proyecto, antes del commit de cada fase
+6. **Checkpoint al final de cada fase**: ver protocolo en `docs/CLAUDE.md`
+7. **Git**: mensajes en español, en infinitivo
 
 ## Tests E2E con Playwright MCP
 

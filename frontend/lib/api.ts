@@ -295,6 +295,31 @@ export const api = {
   },
 
   pedidos: {
+    crear: (
+      comercioId: string,
+      data: {
+        customer_id: string
+        origin: string
+        delivery_type: string
+        delivery_address?: string | null
+        payment_status: string
+        total_amount: number
+        credit_applied?: number
+        items: {
+          product_id?: string | null
+          combo_id?: string | null
+          quantity: number
+          unit_price: number
+          variant?: Record<string, unknown> | null
+          notes?: string | null
+        }[]
+      },
+    ) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
     listar: (
       comercioId: string,
       params?: {
@@ -374,7 +399,10 @@ export const api = {
   },
 
   clientes: {
-    crear: (comercioId: string, data: { phone: string; name?: string; address?: string }) =>
+    buscarPorTelefono: (comercioId: string, phone: string) =>
+      request<ClienteResponse>(`/comercios/${comercioId}/clientes/buscar?phone=${encodeURIComponent(phone)}`),
+
+    crear: (comercioId: string, data: { phone: string; name?: string; address?: string; has_whatsapp?: boolean }) =>
       request<ClienteResponse>(`/comercios/${comercioId}/clientes`, {
         method: "POST",
         body: JSON.stringify(data),
@@ -382,6 +410,12 @@ export const api = {
 
     obtener: (comercioId: string, clienteId: string) =>
       request<ClienteResponse>(`/comercios/${comercioId}/clientes/${clienteId}`),
+
+    actualizar: (comercioId: string, clienteId: string, data: { name?: string; address?: string; has_whatsapp?: boolean }) =>
+      request<ClienteResponse>(`/comercios/${comercioId}/clientes/${clienteId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
   },
 }
 
@@ -494,6 +528,7 @@ export interface ClienteResponse {
   phone: string
   name: string | null
   address: string | null
+  has_whatsapp: boolean
   credit_balance: number
   created_at: string
 }

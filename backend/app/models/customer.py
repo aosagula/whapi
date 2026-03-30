@@ -38,6 +38,8 @@ class Customer(Base):
     # Nombre obtenido del chatbot en el primer pedido
     name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
     address: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    # False → no se envían notificaciones automáticas por WhatsApp
+    has_whatsapp: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False, server_default=sa.true())
     # Saldo de crédito a favor (por cancelaciones)
     credit_balance: Mapped[float] = mapped_column(
         sa.Numeric(10, 2), default=0, nullable=False

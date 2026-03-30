@@ -90,6 +90,8 @@ class Order(Base):
         nullable=False,
         index=True,
     )
+    # Número visible de pedido (secuencial por comercio, gestionado a nivel app)
+    order_number: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(
         sa.UUID(as_uuid=True),
         sa.ForeignKey("customers.id", ondelete="RESTRICT"),
@@ -115,6 +117,15 @@ class Order(Base):
     credit_applied: Mapped[float] = mapped_column(
         sa.Numeric(10, 2), default=0, nullable=False
     )
+    # Repartidor asignado (empleado con rol delivery)
+    delivery_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.UUID(as_uuid=True),
+        sa.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Notas internas del equipo (no visibles al cliente)
+    internal_notes: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     # Operador que creó el pedido (solo en pedidos telefónicos/operador)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         sa.UUID(as_uuid=True),
@@ -132,6 +143,9 @@ class Order(Base):
     items: Mapped[list[OrderItem]] = relationship("OrderItem", back_populates="order")
     payments: Mapped[list[Payment]] = relationship("Payment", back_populates="order")
     incidents: Mapped[list[Incident]] = relationship("Incident", back_populates="order")
+    status_history: Mapped[list[OrderStatusHistory]] = relationship(
+        "OrderStatusHistory", back_populates="order", order_by="OrderStatusHistory.changed_at"
+    )
     customer: Mapped["Customer"] = relationship("Customer", back_populates="orders")  # noqa: F821
 
 
@@ -246,3 +260,51 @@ class Incident(Base):
 
     # Relaciones
     order: Mapped[Order] = relationship("Order", back_populates="incidents")
+
+
+class OrderStatusHistory(Base):
+    """Historial de cambios de estado de un pedido."""
+
+    __tablename__ = "order_status_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True),
+        sa.ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # create_type=False porque el ENUM order_status ya fue creado en la migración 0001
+    previous_status: Mapped[str | None] = mapped_column(
+        sa.Enum(
+            "in_progress", "pending_payment", "pending_preparation",
+            "in_preparation", "to_dispatch", "in_delivery",
+            "delivered", "cancelled", "with_incident", "discarded",
+            name="order_status", create_type=False,
+        ),
+        nullable=True,
+    )
+    new_status: Mapped[str] = mapped_column(
+        sa.Enum(
+            "in_progress", "pending_payment", "pending_preparation",
+            "in_preparation", "to_dispatch", "in_delivery",
+            "delivered", "cancelled", "with_incident", "discarded",
+            name="order_status", create_type=False,
+        ),
+        nullable=False,
+    )
+    # Usuario que efectuó el cambio (None = sistema automático)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(
+        sa.UUID(as_uuid=True),
+        sa.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    changed_at: Mapped[datetime] = mapped_column(
+        sa.TIMESTAMP(timezone=True), default=_now, nullable=False
+    )
+    note: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+
+    # Relaciones
+    order: Mapped[Order] = relationship("Order", back_populates="status_history")

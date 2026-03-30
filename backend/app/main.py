@@ -9,9 +9,11 @@ from sqlalchemy import text
 import app.models  # noqa: F401 — registra todos los mappers de SQLAlchemy
 from app.api.auth import router as auth_router
 from app.api.catalogo import router as catalogo_router
+from app.api.clientes import router as clientes_router
 from app.api.comercios import router as comercios_router
 from app.api.empleados import router as empleados_router
 from app.api.health import router as health_router
+from app.api.pedidos import router as pedidos_router
 from app.core.config import settings
 from app.core.db import AsyncSessionLocal
 
@@ -50,3 +52,5 @@ app.include_router(auth_router)
 app.include_router(comercios_router)
 app.include_router(empleados_router)
 app.include_router(catalogo_router)
+app.include_router(clientes_router)
+app.include_router(pedidos_router)

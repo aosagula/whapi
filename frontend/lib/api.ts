@@ -293,4 +293,207 @@ export const api = {
     eliminar: (comercioId: string, comboId: string) =>
       request<void>(`/comercios/${comercioId}/combos/${comboId}`, { method: "DELETE" }),
   },
+
+  pedidos: {
+    listar: (
+      comercioId: string,
+      params?: {
+        status?: string
+        payment_status?: string
+        delivery_person_id?: string
+        page?: number
+        page_size?: number
+      },
+    ) => {
+      const q = new URLSearchParams()
+      if (params?.status) q.set("status", params.status)
+      if (params?.payment_status) q.set("payment_status", params.payment_status)
+      if (params?.delivery_person_id) q.set("delivery_person_id", params.delivery_person_id)
+      if (params?.page) q.set("page", String(params.page))
+      if (params?.page_size) q.set("page_size", String(params.page_size))
+      const qs = q.toString() ? `?${q.toString()}` : ""
+      return request<OrderListResponse>(`/comercios/${comercioId}/pedidos${qs}`)
+    },
+
+    obtener: (comercioId: string, pedidoId: string) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}`),
+
+    cambiarEstado: (comercioId: string, pedidoId: string, status: string, note?: string) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}/estado`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, note }),
+      }),
+
+    marcarPago: (comercioId: string, pedidoId: string, payment_status: string) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}/pago`, {
+        method: "PATCH",
+        body: JSON.stringify({ payment_status }),
+      }),
+
+    asignarRepartidor: (
+      comercioId: string,
+      pedidoId: string,
+      delivery_person_id: string | null,
+    ) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}/repartidor`, {
+        method: "PATCH",
+        body: JSON.stringify({ delivery_person_id }),
+      }),
+
+    actualizarNotas: (comercioId: string, pedidoId: string, internal_notes: string | null) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}/notas`, {
+        method: "PATCH",
+        body: JSON.stringify({ internal_notes }),
+      }),
+
+    cancelar: (
+      comercioId: string,
+      pedidoId: string,
+      data: { payment_policy?: string; note?: string },
+    ) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}/cancelar`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    reportarIncidencia: (
+      comercioId: string,
+      pedidoId: string,
+      data: { type: string; description?: string },
+    ) =>
+      request<OrderResponse>(`/comercios/${comercioId}/pedidos/${pedidoId}/incidencia`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    resolverRedespacho: (comercioId: string, pedidoId: string, incidenciaId: string) =>
+      request<OrderResponse>(
+        `/comercios/${comercioId}/pedidos/${pedidoId}/incidencias/${incidenciaId}/redespacho`,
+        { method: "POST", body: JSON.stringify({}) },
+      ),
+  },
+
+  clientes: {
+    crear: (comercioId: string, data: { phone: string; name?: string; address?: string }) =>
+      request<ClienteResponse>(`/comercios/${comercioId}/clientes`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    obtener: (comercioId: string, clienteId: string) =>
+      request<ClienteResponse>(`/comercios/${comercioId}/clientes/${clienteId}`),
+  },
+}
+
+// ── Tipos de pedidos ──────────────────────────────────────────────────────────
+
+export type OrderStatus =
+  | "in_progress"
+  | "pending_payment"
+  | "pending_preparation"
+  | "in_preparation"
+  | "to_dispatch"
+  | "in_delivery"
+  | "delivered"
+  | "cancelled"
+  | "with_incident"
+  | "discarded"
+
+export type PaymentStatus =
+  | "paid"
+  | "cash_on_delivery"
+  | "pending_payment"
+  | "credit"
+  | "refunded"
+  | "no_charge"
+
+export interface CustomerSummary {
+  id: string
+  name: string | null
+  phone: string
+}
+
+export interface OrderItemResponse {
+  id: string
+  product_id: string | null
+  combo_id: string | null
+  quantity: number
+  unit_price: number
+  variant: Record<string, unknown> | null
+  notes: string | null
+  display_name: string | null
+}
+
+export interface StatusHistoryResponse {
+  id: string
+  previous_status: string | null
+  new_status: string
+  changed_by: string | null
+  changed_by_name: string | null
+  changed_at: string
+  note: string | null
+}
+
+export interface IncidentResponse {
+  id: string
+  type: string
+  description: string | null
+  reported_by: string | null
+  reported_by_name: string | null
+  status: string
+  resolved_at: string | null
+  created_at: string
+}
+
+export interface OrderResponse {
+  id: string
+  business_id: string
+  order_number: number
+  customer: CustomerSummary
+  status: OrderStatus
+  payment_status: PaymentStatus
+  origin: string
+  delivery_type: string
+  delivery_address: string | null
+  total_amount: number
+  credit_applied: number
+  delivery_person_id: string | null
+  internal_notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  items: OrderItemResponse[]
+  status_history: StatusHistoryResponse[]
+  incidents: IncidentResponse[]
+}
+
+export interface OrderListItem {
+  id: string
+  order_number: number
+  customer: CustomerSummary
+  status: OrderStatus
+  payment_status: PaymentStatus
+  origin: string
+  delivery_type: string
+  total_amount: number
+  delivery_person_id: string | null
+  created_at: string
+  items_summary: string[]
+}
+
+export interface OrderListResponse {
+  items: OrderListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface ClienteResponse {
+  id: string
+  business_id: string
+  phone: string
+  name: string | null
+  address: string | null
+  credit_balance: number
+  created_at: string
 }

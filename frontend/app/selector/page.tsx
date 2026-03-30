@@ -45,6 +45,7 @@ export default function SelectorPage() {
     // Guardar el comercio activo en localStorage para el panel
     localStorage.setItem("comercio_id", comercio.id)
     localStorage.setItem("comercio_name", comercio.name)
+    localStorage.setItem("comercio_role", comercio.role)
     router.push(`/${comercio.id}/pedidos`)
   }
 

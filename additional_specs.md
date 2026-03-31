@@ -83,3 +83,36 @@ Se agregaron dos campos opcionales al modelo `Order`:
 - `delivery_notes: TEXT nullable` — instrucciones para el repartidor (timbre, piso, referencia). Se carga en el paso 3 del wizard.
 
 Ambos campos se muestran en el resumen del paso 5 (confirmación) y en el panel de detalle del pedido en el kanban (amber para cocina, azul para entrega). Son de solo lectura en el detalle — se definen al crear el pedido. Migración: `0003_agregar_notas_cocina_entrega.py`.
+
+---
+
+## Fase 7 — Clientes y créditos
+
+### Listado de clientes con búsqueda
+El endpoint `GET /comercios/{id}/clientes` soporta:
+- Paginación con `page` y `page_size` (máx. 100)
+- Búsqueda case-insensitive por nombre o teléfono con el parámetro `q`
+- Orden por fecha de alta descendente
+
+### Historial de pedidos del cliente
+`GET /comercios/{id}/clientes/{cliente_id}/pedidos` devuelve todos los pedidos del cliente en ese comercio, ordenados por fecha descendente. El detalle de cada pedido incluye: número, estado, estado de pago, origen, tipo de entrega, total y fecha.
+
+### Ajuste manual de crédito
+`POST /comercios/{id}/clientes/{cliente_id}/creditos` permite al Admin/Dueño registrar ajustes manuales de crédito:
+- Monto positivo → acredita saldo al cliente
+- Monto negativo → descuenta saldo (falla con 422 si el resultado sería negativo)
+- Campo `reason` opcional para registrar el motivo
+- Actualiza `credit_balance` en el registro del cliente atómicamente
+- Solo roles `owner` y `admin` pueden ejecutarlo (cajero recibe 403)
+
+### Historial de movimientos de crédito
+`GET /comercios/{id}/clientes/{cliente_id}/creditos` devuelve todos los movimientos de crédito del cliente, ordenados por fecha descendente. Cada movimiento incluye: monto (con signo), motivo, pedido vinculado (si aplica) y timestamp.
+
+### Edición inline en detalle de cliente
+El panel de detalle permite editar nombre y dirección directamente con un click en el ícono de edición (pencil). El campo se convierte en un input con botones Confirmar (Enter) y Cancelar (Escape). El cambio se persiste con `PATCH /clientes/{id}`.
+
+### Navegación al detalle desde listado
+Al hacer click en una fila del listado de clientes se navega a `/{comercio_id}/clientes/{cliente_id}`. El detalle incluye botón "Volver al listado" (con aria-label) para regresar.
+
+### Acceso al ajuste de crédito según rol
+El botón "Ajustar" crédito en el detalle solo se muestra para roles `owner` y `admin`. El rol se lee de `localStorage.comercio_role` (seteado al seleccionar el comercio). El cajero ve el saldo pero no puede modificarlo.

@@ -401,6 +401,15 @@ export const api = {
   },
 
   clientes: {
+    listar: (comercioId: string, params?: { q?: string; page?: number; page_size?: number }) => {
+      const qs = new URLSearchParams()
+      if (params?.q) qs.set("q", params.q)
+      if (params?.page) qs.set("page", String(params.page))
+      if (params?.page_size) qs.set("page_size", String(params.page_size))
+      const query = qs.toString() ? `?${qs.toString()}` : ""
+      return request<ClienteListResponse>(`/comercios/${comercioId}/clientes${query}`)
+    },
+
     buscarPorTelefono: (comercioId: string, phone: string) =>
       request<ClienteResponse>(`/comercios/${comercioId}/clientes/buscar?phone=${encodeURIComponent(phone)}`),
 
@@ -416,6 +425,18 @@ export const api = {
     actualizar: (comercioId: string, clienteId: string, data: { name?: string; address?: string; has_whatsapp?: boolean }) =>
       request<ClienteResponse>(`/comercios/${comercioId}/clientes/${clienteId}`, {
         method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+
+    listarPedidos: (comercioId: string, clienteId: string) =>
+      request<PedidoResumenResponse[]>(`/comercios/${comercioId}/clientes/${clienteId}/pedidos`),
+
+    listarCreditos: (comercioId: string, clienteId: string) =>
+      request<CreditoResponse[]>(`/comercios/${comercioId}/clientes/${clienteId}/creditos`),
+
+    ajustarCredito: (comercioId: string, clienteId: string, data: { amount: number; reason?: string }) =>
+      request<CreditoResponse>(`/comercios/${comercioId}/clientes/${clienteId}/creditos`, {
+        method: "POST",
         body: JSON.stringify(data),
       }),
   },
@@ -534,5 +555,32 @@ export interface ClienteResponse {
   address: string | null
   has_whatsapp: boolean
   credit_balance: number
+  created_at: string
+}
+
+export interface ClienteListResponse {
+  items: ClienteResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface PedidoResumenResponse {
+  id: string
+  order_number: number
+  status: OrderStatus
+  payment_status: PaymentStatus
+  origin: string
+  delivery_type: string
+  total_amount: number
+  created_at: string
+}
+
+export interface CreditoResponse {
+  id: string
+  customer_id: string
+  amount: number
+  reason: string | null
+  order_id: string | null
   created_at: string
 }

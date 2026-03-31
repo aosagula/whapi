@@ -116,3 +116,43 @@ Al hacer click en una fila del listado de clientes se navega a `/{comercio_id}/c
 
 ### Acceso al ajuste de crédito según rol
 El botón "Ajustar" crédito en el detalle solo se muestra para roles `owner` y `admin`. El rol se lee de `localStorage.comercio_role` (seteado al seleccionar el comercio). El cajero ve el saldo pero no puede modificarlo.
+
+---
+
+## Fase 8 — Conversaciones activas (HITL)
+
+### Roles con acceso al panel de conversaciones
+`ROLES_HITL = {"owner", "admin", "cashier"}`. Cocinero y repartidor reciben 403. La restricción aplica a todos los endpoints del módulo conversaciones.
+
+### Estados de sesión visibles en el listado
+El listado `/comercios/{id}/conversaciones` devuelve únicamente sesiones en `waiting_operator` o `assigned_human`. Las sesiones `closed` y `active_bot` no aparecen.
+
+### Ordenamiento del listado
+Las sesiones se ordenan por `created_at` ascendente (las más antiguas primero) para priorizar la atención de los clientes que llevan más tiempo esperando.
+
+### Campo `wait_seconds` en el listado
+Cada sesión del listado incluye `wait_seconds`, calculado como la diferencia en segundos entre `now()` y `created_at`. Permite mostrar cuánto tiempo lleva esperando el cliente sin que el frontend haga cálculos de fechas.
+
+### Transición `atender` (waiting_operator → assigned_human)
+Solo válida si la sesión está en `waiting_operator`. Devuelve 409 si ya está asignada u otro estado. Asigna `assigned_operator_id` y `assigned_operator_name` con los datos del usuario autenticado.
+
+### Envío de mensajes del operador
+`POST .../mensaje` solo funciona en estado `assigned_human`. Devuelve 409 si la sesión no está asignada. Un mensaje vacío o con solo espacios devuelve 422. El mensaje se guarda con `direction="outbound"` en la tabla `Message`.
+
+### Devolución al bot (assigned_human → active_bot)
+`POST .../devolver-al-bot` limpia `assigned_operator_id` y `assigned_operator_name`. Solo válido en `assigned_human`; devuelve 409 en cualquier otro estado.
+
+### Cierre sin pedido (assigned_human → closed)
+`POST .../cerrar` cierra la sesión y descarta el pedido en curso (si existe) cambiando su estado a `discarded`. Solo válido en `assigned_human`. La sesión cerrada desaparece del listado.
+
+### Detección del pedido en curso en el detalle
+El helper `_cargar_pedido_en_curso` busca un `Order` asociado a la sesión con estado distinto de `delivered`, `cancelled` y `discarded`. Si hay un pedido activo, se incluye en la respuesta con sus ítems y datos de entrega.
+
+### Auto-refresco del listado
+El listado de conversaciones se refresca automáticamente cada 10 segundos via `setInterval`. También hay un botón "Actualizar" manual para forzar la recarga.
+
+### Layout split en el detalle de conversación
+El detalle usa un layout de dos columnas: panel izquierdo flexible (historial de chat + input) y panel derecho fijo de 288px (pedido en curso, datos del cliente, acciones del operador). Las acciones (Devolver al bot, Cerrar sin pedido) solo aparecen cuando `status === "assigned_human"`.
+
+### Separador "Operador conectado"
+Cuando la sesión pasa a `assigned_human`, se muestra un separador visual en el chat con el texto "— Operador conectado —" para indicar el punto desde el cual el humano toma control.

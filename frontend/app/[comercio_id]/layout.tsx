@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   Phone,
   Users,
+  MessageSquare,
   Settings,
   BarChart2,
   ChevronLeft,
@@ -103,6 +104,7 @@ export default function ComercioLayout({ children }: { children: React.ReactNode
     { href: `${base}/pedidos`, label: "Pedidos", icon: ShoppingBag, testId: "nav-pedidos" },
     { href: `${base}/pedidos-manuales`, label: "Pedidos manuales", icon: Phone, testId: "nav-pedidos-manuales" },
     { href: `${base}/clientes`, label: "Clientes", icon: Users, testId: "nav-clientes" },
+    { href: `${base}/conversaciones`, label: "Conversaciones", icon: MessageSquare, testId: "nav-conversaciones" },
     {
       href: `${base}/ajustes`,
       label: "Ajustes",

@@ -440,6 +440,35 @@ export const api = {
         body: JSON.stringify(data),
       }),
   },
+
+  conversaciones: {
+    listar: (comercioId: string) =>
+      request<SesionListItem[]>(`/comercios/${comercioId}/conversaciones`),
+
+    obtener: (comercioId: string, sessionId: string) =>
+      request<SesionDetalle>(`/comercios/${comercioId}/conversaciones/${sessionId}`),
+
+    atender: (comercioId: string, sessionId: string) =>
+      request<SesionDetalle>(`/comercios/${comercioId}/conversaciones/${sessionId}/atender`, {
+        method: "POST",
+      }),
+
+    enviarMensaje: (comercioId: string, sessionId: string, content: string) =>
+      request<MensajeResponse>(`/comercios/${comercioId}/conversaciones/${sessionId}/mensaje`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      }),
+
+    devolverAlBot: (comercioId: string, sessionId: string) =>
+      request<SesionDetalle>(`/comercios/${comercioId}/conversaciones/${sessionId}/devolver-al-bot`, {
+        method: "POST",
+      }),
+
+    cerrar: (comercioId: string, sessionId: string) =>
+      request<SesionDetalle>(`/comercios/${comercioId}/conversaciones/${sessionId}/cerrar`, {
+        method: "POST",
+      }),
+  },
 }
 
 // ── Tipos de pedidos ──────────────────────────────────────────────────────────
@@ -583,4 +612,63 @@ export interface CreditoResponse {
   reason: string | null
   order_id: string | null
   created_at: string
+}
+
+// ── Tipos de conversaciones HITL ──────────────────────────────────────────────
+
+export type SessionStatus = "active_bot" | "waiting_operator" | "assigned_human" | "closed"
+
+export interface ClienteResumenConv {
+  id: string
+  name: string | null
+  phone: string
+  address: string | null
+  credit_balance: number
+}
+
+export interface ItemResumen {
+  display_name: string | null
+  quantity: number
+  unit_price: number
+}
+
+export interface PedidoCursoResumen {
+  id: string
+  order_number: number
+  status: string
+  delivery_type: string
+  delivery_address: string | null
+  total_amount: number
+  items: ItemResumen[]
+}
+
+export interface SesionListItem {
+  id: string
+  status: SessionStatus
+  customer: ClienteResumenConv
+  assigned_operator_id: string | null
+  assigned_operator_name: string | null
+  pedido_en_curso: PedidoCursoResumen | null
+  created_at: string
+  last_message_at: string | null
+  wait_seconds: number
+}
+
+export interface MensajeResponse {
+  id: string
+  direction: "inbound" | "outbound"
+  content: string
+  sent_at: string
+}
+
+export interface SesionDetalle {
+  id: string
+  status: SessionStatus
+  customer: ClienteResumenConv
+  assigned_operator_id: string | null
+  assigned_operator_name: string | null
+  pedido_en_curso: PedidoCursoResumen | null
+  messages: MensajeResponse[]
+  created_at: string
+  last_message_at: string | null
 }

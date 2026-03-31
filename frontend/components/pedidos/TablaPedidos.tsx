@@ -1,11 +1,12 @@
 "use client"
 
 /**
- * Tablero de pedidos: lista con filtros, refresh y panel de detalle lateral.
+ * Contenedor de vistas de pedidos: tabs (General / Cocina / Delivery)
+ * y dashboard de contadores por estado activo.
  */
 
 import { useState, useEffect, useCallback } from "react"
-import { RefreshCw, Search } from "lucide-react"
+import { RefreshCw, Search, LayoutList, ChefHat, Truck } from "lucide-react"
 import { api, type OrderListItem, type OrderResponse, type OrderStatus, type PaymentStatus } from "@/lib/api"
 import {
   ORDER_STATUS_LABELS,
@@ -17,11 +18,24 @@ import {
   formatTime,
 } from "./order-utils"
 import PedidoDetalle from "./PedidoDetalle"
+import VistaCocina from "./VistaCocina"
+import VistaDelivery from "./VistaDelivery"
 
 interface Props {
   comercioId: string
   userRole: string
 }
+
+type TabView = "general" | "cocina" | "delivery"
+
+// Estados que aparecen en el dashboard de contadores
+const STAT_STATUSES: { key: OrderStatus; label: string }[] = [
+  { key: "pending_preparation", label: "Pend. prep." },
+  { key: "in_preparation", label: "En prep." },
+  { key: "to_dispatch", label: "A despacho" },
+  { key: "in_delivery", label: "En camino" },
+  { key: "with_incident", label: "Incidencias" },
+]
 
 const STATUS_OPTIONS = [
   { value: "", label: "Todos los estados" },
@@ -43,6 +57,35 @@ const PAYMENT_OPTIONS = [
 ]
 
 export default function TablaPedidos({ comercioId, userRole }: Props) {
+  const [activeTab, setActiveTab] = useState<TabView>("general")
+
+  // ── Stats ───────────────────────────────────────────────────────────────────
+  const [stats, setStats] = useState<Record<string, number>>({})
+  const [loadingStats, setLoadingStats] = useState(true)
+
+  const fetchStats = useCallback(async () => {
+    setLoadingStats(true)
+    try {
+      const results = await Promise.all(
+        STAT_STATUSES.map(({ key }) =>
+          api.pedidos.listar(comercioId, { status: key, page_size: 1 }),
+        ),
+      )
+      const counts: Record<string, number> = {}
+      STAT_STATUSES.forEach(({ key }, i) => {
+        counts[key] = results[i].total
+      })
+      setStats(counts)
+    } finally {
+      setLoadingStats(false)
+    }
+  }, [comercioId])
+
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  // ── Vista General ────────────────────────────────────────────────────────────
   const [pedidos, setPedidos] = useState<OrderListItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -85,8 +128,8 @@ export default function TablaPedidos({ comercioId, userRole }: Props) {
   )
 
   useEffect(() => {
-    fetchPedidos()
-  }, [fetchPedidos])
+    if (activeTab === "general") fetchPedidos()
+  }, [fetchPedidos, activeTab])
 
   async function openDetalle(id: string) {
     setSelectedId(id)
@@ -102,6 +145,7 @@ export default function TablaPedidos({ comercioId, userRole }: Props) {
   function handleUpdated(updated: OrderResponse) {
     setDetalle(updated)
     fetchPedidos(true)
+    fetchStats()
   }
 
   const filteredPedidos = search
@@ -114,192 +158,254 @@ export default function TablaPedidos({ comercioId, userRole }: Props) {
 
   const totalPages = Math.ceil(total / pageSize)
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* Barra de herramientas */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Buscar cliente o teléfono..."
-            value={search}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-          />
-        </div>
-
-        <select
-          value={statusFilter}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-            setStatusFilter(e.target.value)
-            setPage(1)
-          }}
-          className="border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={paymentFilter}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-            setPaymentFilter(e.target.value)
-            setPage(1)
-          }}
-          className="border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white"
-        >
-          {PAYMENT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        <button
-          title="Actualizar"
-          onClick={() => fetchPedidos(true)}
-          disabled={refreshing}
-          className="p-2 border border-border rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 text-gray-500 ${refreshing ? "animate-spin" : ""}`} />
-        </button>
+      {/* Dashboard de contadores */}
+      <div className={`grid grid-cols-5 gap-3 ${loadingStats ? "opacity-50" : ""}`}>
+        {STAT_STATUSES.map(({ key, label }) => (
+          <div
+            key={key}
+            className="flex flex-col items-center justify-center gap-2 px-4 py-5 rounded-2xl border border-border bg-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className={`w-3 h-3 rounded-full ${ORDER_STATUS_COLORS[key].split(" ")[0]}`} />
+              <span className="text-sm text-gray-500 font-medium">{label}</span>
+            </div>
+            <span className={`text-4xl font-bold tabular-nums leading-none ${ORDER_STATUS_COLORS[key].split(" ")[1]}`}>
+              {loadingStats ? "—" : (stats[key] ?? 0)}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {/* Contador */}
-      <p className="text-sm text-gray-500">
-        {total} pedido{total !== 1 ? "s" : ""}
-        {(statusFilter || paymentFilter) ? " (con filtros)" : ""}
-      </p>
-
-      {/* Error */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* Tabla */}
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Cargando pedidos...</div>
-      ) : filteredPedidos.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          {search ? "Sin coincidencias." : "No hay pedidos para mostrar."}
-        </div>
-      ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-border">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 w-16">#</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Hora</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Productos</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredPedidos.map((pedido) => (
-                <tr
-                  key={pedido.id}
-                  className="hover:bg-[#faf7f2] cursor-pointer transition-colors"
-                  onClick={() => openDetalle(pedido.id)}
-                >
-                  <td className="px-4 py-3 font-mono text-gray-400 text-xs">
-                    #{pedido.order_number}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-brown">{pedido.customer.name ?? "Sin nombre"}</div>
-                    <div className="text-gray-400 text-xs">{pedido.customer.phone}</div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
-                    <div>{formatTime(pedido.created_at)}</div>
-                    <div className="text-xs text-gray-400">{DELIVERY_TYPE_LABELS[pedido.delivery_type] ?? pedido.delivery_type}</div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">
-                    <div className="max-w-[200px] truncate text-xs">
-                      {pedido.items_summary.join(", ") || "—"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-brown">
-                    {formatCurrency(pedido.total_amount)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                          ORDER_STATUS_COLORS[pedido.status as OrderStatus] ?? "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {ORDER_STATUS_LABELS[pedido.status as OrderStatus] ?? pedido.status}
-                      </span>
-                      <div>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                            PAYMENT_STATUS_COLORS[pedido.payment_status as PaymentStatus] ?? "bg-gray-100 text-gray-500"
-                          }`}
-                        >
-                          {PAYMENT_STATUS_LABELS[pedido.payment_status as PaymentStatus] ?? pedido.payment_status}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-xs text-brand hover:underline">Ver detalle</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-3">
+      {/* Tabs de vista */}
+      <div className="flex gap-1 border-b border-border">
+        {(
+          [
+            { id: "general", label: "General", Icon: LayoutList },
+            { id: "cocina", label: "Cocina", Icon: ChefHat },
+            { id: "delivery", label: "Delivery", Icon: Truck },
+          ] as { id: TabView; label: string; Icon: React.ElementType }[]
+        ).map(({ id, label, Icon }) => (
           <button
-            className="btn-outline px-4 py-1.5 text-sm rounded-xl disabled:opacity-40"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === id
+                ? "border-brand text-brand"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
           >
-            Anterior
+            <Icon className="h-4 w-4" />
+            {label}
           </button>
-          <span className="text-sm text-gray-500">
-            Página {page} de {totalPages}
-          </span>
-          <button
-            className="btn-outline px-4 py-1.5 text-sm rounded-xl disabled:opacity-40"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Siguiente
-          </button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* Panel de detalle lateral */}
-      {selectedId && (
-        loadingDetalle ? (
-          <>
-            <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setSelectedId(null)} />
-            <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-50 shadow-xl flex items-center justify-center">
-              <span className="text-gray-400">Cargando...</span>
+      {/* ── Tab: General ─────────────────────────────────────────────────────── */}
+      {activeTab === "general" && (
+        <div className="space-y-4">
+          {/* Barra de herramientas */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar cliente o teléfono..."
+                value={search}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+              />
             </div>
-          </>
-        ) : detalle ? (
-          <PedidoDetalle
-            pedido={detalle}
-            comercioId={comercioId}
-            userRole={userRole}
-            onClose={() => { setSelectedId(null); setDetalle(null) }}
-            onUpdated={handleUpdated}
-          />
-        ) : null
+
+            <select
+              value={statusFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                setStatusFilter(e.target.value)
+                setPage(1)
+              }}
+              className="border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={paymentFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                setPaymentFilter(e.target.value)
+                setPage(1)
+              }}
+              className="border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white"
+            >
+              {PAYMENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+
+            <button
+              title="Actualizar"
+              onClick={() => { fetchPedidos(true); fetchStats() }}
+              disabled={refreshing}
+              className="p-2 border border-border rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 text-gray-500 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          {/* Contador */}
+          <p className="text-sm text-gray-500">
+            {total} pedido{total !== 1 ? "s" : ""}
+            {statusFilter || paymentFilter ? " (con filtros)" : ""}
+          </p>
+
+          {/* Error */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Tabla */}
+          {loading ? (
+            <div className="text-center py-12 text-gray-400">Cargando pedidos...</div>
+          ) : filteredPedidos.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              {search ? "Sin coincidencias." : "No hay pedidos para mostrar."}
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 w-16">#</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Hora</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Productos</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredPedidos.map((pedido) => (
+                    <tr
+                      key={pedido.id}
+                      className="hover:bg-[#faf7f2] cursor-pointer transition-colors"
+                      onClick={() => openDetalle(pedido.id)}
+                    >
+                      <td className="px-4 py-3 font-mono text-gray-400 text-xs">#{pedido.order_number}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-brown">{pedido.customer.name ?? "Sin nombre"}</div>
+                        <div className="text-gray-400 text-xs">{pedido.customer.phone}</div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
+                        <div>{formatTime(pedido.created_at)}</div>
+                        <div className="text-xs text-gray-400">
+                          {DELIVERY_TYPE_LABELS[pedido.delivery_type] ?? pedido.delivery_type}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">
+                        <div className="max-w-[200px] truncate text-xs">
+                          {pedido.items_summary.join(", ") || "—"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-brown">
+                        {formatCurrency(pedido.total_amount)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                              ORDER_STATUS_COLORS[pedido.status as OrderStatus] ?? "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {ORDER_STATUS_LABELS[pedido.status as OrderStatus] ?? pedido.status}
+                          </span>
+                          <div>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                                PAYMENT_STATUS_COLORS[pedido.payment_status as PaymentStatus] ??
+                                "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {PAYMENT_STATUS_LABELS[pedido.payment_status as PaymentStatus] ??
+                                pedido.payment_status}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-xs text-brand hover:underline">Ver detalle</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-3">
+              <button
+                className="btn-outline px-4 py-1.5 text-sm rounded-xl disabled:opacity-40"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Anterior
+              </button>
+              <span className="text-sm text-gray-500">
+                Página {page} de {totalPages}
+              </span>
+              <button
+                className="btn-outline px-4 py-1.5 text-sm rounded-xl disabled:opacity-40"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+
+          {/* Panel de detalle lateral */}
+          {selectedId &&
+            (loadingDetalle ? (
+              <>
+                <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setSelectedId(null)} />
+                <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-50 shadow-xl flex items-center justify-center">
+                  <span className="text-gray-400">Cargando...</span>
+                </div>
+              </>
+            ) : detalle ? (
+              <PedidoDetalle
+                pedido={detalle}
+                comercioId={comercioId}
+                userRole={userRole}
+                onClose={() => {
+                  setSelectedId(null)
+                  setDetalle(null)
+                }}
+                onUpdated={handleUpdated}
+              />
+            ) : null)}
+        </div>
+      )}
+
+      {/* ── Tab: Cocina ──────────────────────────────────────────────────────── */}
+      {activeTab === "cocina" && (
+        <VistaCocina comercioId={comercioId} userRole={userRole} />
+      )}
+
+      {/* ── Tab: Delivery ────────────────────────────────────────────────────── */}
+      {activeTab === "delivery" && (
+        <VistaDelivery comercioId={comercioId} userRole={userRole} />
       )}
     </div>
   )

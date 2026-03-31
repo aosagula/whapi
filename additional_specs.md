@@ -156,3 +156,19 @@ El detalle usa un layout de dos columnas: panel izquierdo flexible (historial de
 
 ### Separador "Operador conectado"
 Cuando la sesión pasa a `assigned_human`, se muestra un separador visual en el chat con el texto "— Operador conectado —" para indicar el punto desde el cual el humano toma control.
+
+---
+
+## Mejoras transversales — Página de Pedidos (sin fase asignada)
+
+### Tabs de vista (General / Cocina / Delivery)
+La página de pedidos agrega un sistema de tres tabs:
+
+- **General**: la tabla existente con todos los filtros (estado, pago, búsqueda, paginación).
+- **Cocina** (`VistaCocina`): muestra solo pedidos en `pending_preparation` e `in_preparation`, agrupados por estado, en grilla de tarjetas. Cada tarjeta muestra: nº de pedido, hora, tipo de entrega e ítems. Incluye botón de avance rápido al siguiente estado (habilitado para roles `cook`, `cashier`, `admin`, `owner`). Clic en la tarjeta abre el panel de detalle lateral.
+- **Delivery** (`VistaDelivery`): muestra solo pedidos en `to_dispatch` e `in_delivery`, agrupados por estado, en grilla de tarjetas. Cada tarjeta muestra: nº de pedido, hora, nombre del cliente, teléfono, tipo de entrega e ítems resumidos. La dirección completa se consulta en el panel de detalle. Incluye botón de avance rápido (habilitado para roles `delivery`, `cashier`, `admin`, `owner`).
+
+Ambas vistas cargan con `page_size: 50` y un botón de refresh. El panel de detalle lateral es accesible desde las tres vistas.
+
+### Dashboard de contadores por estado
+Encima de los tabs se muestra una fila de chips con el conteo en tiempo real de pedidos activos por estado: `pending_preparation`, `in_preparation`, `to_dispatch`, `in_delivery` y `with_incident`. Los conteos se obtienen haciendo llamadas paralelas al endpoint de listado con `page_size=1` y leyendo el campo `total`. Se actualizan al montar la página y al cambiar el estado de un pedido desde la vista General.

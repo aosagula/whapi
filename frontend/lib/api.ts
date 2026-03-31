@@ -441,6 +441,34 @@ export const api = {
       }),
   },
 
+  whatsapp: {
+    listar: (comercioId: string) =>
+      request<WhatsappNumberResponse[]>(`/comercios/${comercioId}/whatsapp`),
+
+    agregar: (comercioId: string, data: { phone_number: string; label?: string }) =>
+      request<WhatsappNumberResponse>(`/comercios/${comercioId}/whatsapp`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    obtenerQR: (comercioId: string, numeroId: string) =>
+      request<WhatsappQRResponse>(`/comercios/${comercioId}/whatsapp/${numeroId}/qr`),
+
+    reconectar: (comercioId: string, numeroId: string) =>
+      request<WhatsappQRResponse>(`/comercios/${comercioId}/whatsapp/${numeroId}/reconectar`, {
+        method: "POST",
+      }),
+
+    editar: (comercioId: string, numeroId: string, data: { label?: string; is_active?: boolean }) =>
+      request<WhatsappNumberResponse>(`/comercios/${comercioId}/whatsapp/${numeroId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+
+    eliminar: (comercioId: string, numeroId: string) =>
+      request<void>(`/comercios/${comercioId}/whatsapp/${numeroId}`, { method: "DELETE" }),
+  },
+
   conversaciones: {
     listar: (comercioId: string) =>
       request<SesionListItem[]>(`/comercios/${comercioId}/conversaciones`),
@@ -612,6 +640,28 @@ export interface CreditoResponse {
   reason: string | null
   order_id: string | null
   created_at: string
+}
+
+// ── Tipos de WhatsApp ─────────────────────────────────────────────────────────
+
+export type WhatsappStatus = "connected" | "disconnected" | "scanning"
+
+export interface WhatsappNumberResponse {
+  id: string
+  business_id: string
+  phone_number: string
+  label: string | null
+  session_name: string | null
+  status: WhatsappStatus
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface WhatsappQRResponse {
+  session_name: string
+  qr_code: string | null
+  status: WhatsappStatus
 }
 
 // ── Tipos de conversaciones HITL ──────────────────────────────────────────────

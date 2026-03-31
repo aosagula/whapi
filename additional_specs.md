@@ -172,3 +172,35 @@ Ambas vistas cargan con `page_size: 50` y un botón de refresh. El panel de deta
 
 ### Dashboard de contadores por estado
 Encima de los tabs se muestra una fila de chips con el conteo en tiempo real de pedidos activos por estado: `pending_preparation`, `in_preparation`, `to_dispatch`, `in_delivery` y `with_incident`. Los conteos se obtienen haciendo llamadas paralelas al endpoint de listado con `page_size=1` y leyendo el campo `total`. Se actualizan al montar la página y al cambiar el estado de un pedido desde la vista General.
+
+Los contadores se muestran como tarjetas en una grilla de 5 columnas (`grid-cols-5`), con número grande (`text-4xl font-bold`) y etiqueta debajo, distribuyéndose uniformemente a lo ancho de la pantalla.
+
+---
+
+## Fase 9 — Gestión de números de WhatsApp
+
+### Modelo `WhatsappNumber` — campo `label`
+Se agregó el campo `label: String(100) nullable` al modelo `WhatsappNumber` para que el owner/admin pueda identificar cada número con un nombre descriptivo (ej: "Número principal", "Zona Norte"). Migración: `b504cb07262e_agregar_label_a_whatsapp_numbers`.
+
+### Acceso restringido a owner y admin
+Todos los endpoints del módulo WhatsApp (`GET/POST/PATCH/DELETE /comercios/{id}/whatsapp`) requieren rol `owner` o `admin` (via `get_membresia_gestion`). Cajero, cocinero y repartidor reciben 403.
+
+### Integración WPPConnect — modo graceful sin servidor
+Si `WPPCONNECT_HOST` está vacío (no configurado), todas las operaciones WPPConnect son no-ops. El número se crea igualmente en la DB con estado `scanning`. Esto permite usar y testear la UI sin servidor WPPConnect activo.
+
+### Flujo de conexión de un número
+1. El owner ingresa el número y una etiqueta opcional → POST crea el registro en DB con `status="scanning"` e inicia sesión en WPPConnect.
+2. Automáticamente se abre el modal QR que hace polling cada 5 segundos al endpoint `GET .../qr`.
+3. Cuando WPPConnect reporta `connected`, el modal muestra confirmación y se cierra automáticamente.
+
+### Eliminación (soft delete)
+`DELETE` no borra el registro; lo marca con `is_active=False` y `status="disconnected"`. Las conversaciones históricas asociadas al número se conservan.
+
+### Reconexión
+`POST .../reconectar` reinicia la sesión WPPConnect y devuelve un nuevo QR. Usado cuando un número queda en estado `disconnected`.
+
+### Edición inline de etiqueta
+En la tabla de números, el botón de edición convierte la celda de etiqueta en un input inline (confirmación con Enter o botón ✓, cancelación con Escape o botón ✗).
+
+### Alerta de números desconectados
+Si hay uno o más números activos con `status="disconnected"`, se muestra un banner de advertencia en la parte superior de la página indicando cuántos números necesitan reconexión.

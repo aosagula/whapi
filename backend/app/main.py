@@ -13,6 +13,7 @@ from app.api.clientes import router as clientes_router
 from app.api.comercios import router as comercios_router
 from app.api.conversaciones import router as conversaciones_router
 from app.api.empleados import router as empleados_router
+from app.api.whatsapp import router as whatsapp_router
 from app.api.health import router as health_router
 from app.api.pedidos import router as pedidos_router
 from app.core.config import settings
@@ -56,3 +57,4 @@ app.include_router(catalogo_router)
 app.include_router(clientes_router)
 app.include_router(pedidos_router)
 app.include_router(conversaciones_router)
+app.include_router(whatsapp_router)

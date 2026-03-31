@@ -21,6 +21,7 @@ import {
   UserCheck,
   Pizza,
   Gift,
+  Smartphone,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -49,6 +50,7 @@ function buildNav(comercioId: string): NavItem[] {
         { href: `${base}/ajustes/empleados`, label: "Empleados", icon: UserCheck },
         { href: `${base}/ajustes/productos`, label: "Productos", icon: Pizza },
         { href: `${base}/ajustes/combos`, label: "Combos", icon: Gift },
+        { href: `${base}/ajustes/whatsapp`, label: "WhatsApp", icon: Smartphone },
       ],
     },
     { href: `${base}/reportes`, label: "Reportes", icon: BarChart2 },

@@ -34,6 +34,8 @@ class WhatsappNumber(Base):
         index=True,
     )
     phone_number: Mapped[str] = mapped_column(sa.String(30), nullable=False, unique=True)
+    # Etiqueta visible para el usuario (ej: "Número principal", "Zona Norte")
+    label: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
     # Nombre de sesión en WPPConnect
     session_name: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
     status: Mapped[str] = mapped_column(

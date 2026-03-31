@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react"
-import { X, ChevronRight, AlertTriangle } from "lucide-react"
+import { X, ChevronRight, AlertTriangle, Link2, Copy, Check } from "lucide-react"
 import { api, type OrderResponse } from "@/lib/api"
 import {
   ORDER_STATUS_LABELS,
@@ -37,9 +37,13 @@ export default function PedidoDetalle({ pedido, comercioId, userRole, onClose, o
   const [advancing, setAdvancing] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [showIncidencia, setShowIncidencia] = useState(false)
+  const [generandoLink, setGenerandoLink] = useState(false)
+  const [pagoLink, setPagoLink] = useState<string | null>(null)
+  const [linkCopiado, setLinkCopiado] = useState(false)
 
   const canCancel = ["cashier", "admin", "owner"].includes(userRole) && pedido.status !== "delivered"
   const canMarkPaid = ["cashier", "admin", "owner"].includes(userRole)
+  const canGeneratePayLink = ["owner", "admin"].includes(userRole) && pedido.payment_status === "pending_payment"
   const canReportIncident = ["cashier", "admin", "owner", "delivery"].includes(userRole)
   const nextStatus = NEXT_STATUS[pedido.status]
 
@@ -74,6 +78,23 @@ export default function PedidoDetalle({ pedido, comercioId, userRole, onClose, o
   async function handleMarkPaid() {
     const updated = await api.pedidos.marcarPago(comercioId, pedido.id, "paid")
     onUpdated(updated)
+  }
+
+  async function handleGenerarLink() {
+    setGenerandoLink(true)
+    try {
+      const resp = await api.pagos.generarLink(comercioId, pedido.id)
+      setPagoLink(resp.init_point)
+    } finally {
+      setGenerandoLink(false)
+    }
+  }
+
+  async function handleCopiarLink() {
+    if (!pagoLink) return
+    await navigator.clipboard.writeText(pagoLink)
+    setLinkCopiado(true)
+    setTimeout(() => setLinkCopiado(false), 2000)
   }
 
   async function handleResolveRedispatch(incidentId: string) {
@@ -277,6 +298,31 @@ export default function PedidoDetalle({ pedido, comercioId, userRole, onClose, o
             >
               Marcar pagado
             </button>
+          )}
+
+          {canGeneratePayLink && !pagoLink && (
+            <button
+              className="btn-outline px-3 py-2 text-sm rounded-xl flex items-center gap-1.5"
+              onClick={handleGenerarLink}
+              disabled={generandoLink}
+            >
+              <Link2 className="h-4 w-4" />
+              {generandoLink ? "Generando…" : "Link de pago"}
+            </button>
+          )}
+
+          {pagoLink && (
+            <div className="w-full flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-xs">
+              <span className="flex-1 truncate text-blue-700">{pagoLink}</span>
+              <button
+                onClick={handleCopiarLink}
+                className="shrink-0 flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                title="Copiar link"
+              >
+                {linkCopiado ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {linkCopiado ? "Copiado" : "Copiar"}
+              </button>
+            </div>
           )}
 
           {canReportIncident &&

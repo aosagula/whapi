@@ -441,6 +441,14 @@ export const api = {
       }),
   },
 
+  pagos: {
+    generarLink: (comercioId: string, pedidoId: string) =>
+      request<{ preference_id: string; init_point: string; sandbox_init_point: string }>(
+        `/comercios/${comercioId}/pedidos/${pedidoId}/pago-link`,
+        { method: "POST" },
+      ),
+  },
+
   whatsapp: {
     listar: (comercioId: string) =>
       request<WhatsappNumberResponse[]>(`/comercios/${comercioId}/whatsapp`),

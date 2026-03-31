@@ -204,3 +204,28 @@ En la tabla de números, el botón de edición convierte la celda de etiqueta en
 
 ### Alerta de números desconectados
 Si hay uno o más números activos con `status="disconnected"`, se muestra un banner de advertencia en la parte superior de la página indicando cuántos números necesitan reconexión.
+
+---
+
+## Fase 10 — Webhooks, pagos y notificaciones
+
+### Notificaciones automáticas al cliente
+Las notificaciones se envían via WPPConnect al cambiar el estado de un pedido o al cancelarlo. El servicio `services/notificaciones.py` centraliza los mensajes por evento (tabla completa en spec sección 5.7). Usa el primer número `connected` del comercio como sesión emisora. Si WPPConnect no está configurado o falla, la notificación se loguea y se omite sin bloquear la operación.
+
+### Hook de notificaciones en pedidos
+Las funciones `notificar_cambio_estado` y `notificar_cancelacion` se llaman al final de `cambiar_estado` y `cancelar_pedido` en `services/pedidos.py`. Son fire-and-forget: los errores de envío no propagan excepción.
+
+### Integración MercadoPago — modo graceful sin token
+Si `MERCADOPAGO_ACCESS_TOKEN` está vacío, `crear_preferencia` devuelve un link simulado (`https://mp.example.com/pay/{order_id}`). Permite usar y testear la UI sin cuenta de MP configurada.
+
+### Webhook WPPConnect — routing por número destino
+`POST /webhooks/wppconnect` identifica el tenant buscando el campo `to` del payload en la tabla `whatsapp_numbers`. Si el número no está registrado, responde `{"ok": true, "skipped": true}`. Si el cliente no existe, lo crea como anónimo. Guarda el mensaje entrante en la sesión activa del cliente (o crea una nueva sesión `active_bot`). No requiere JWT.
+
+### Webhook MercadoPago — IPN
+`POST /webhooks/mercadopago` acepta notificaciones de tipo `payment`. Verifica el estado del pago con la API de MP. Si está `approved`, actualiza `payment_status → paid` en el pedido y notifica al cliente. Implementa idempotencia: si el pedido ya está pagado, ignora la notificación. No requiere JWT.
+
+### Endpoint pago-link
+`POST /comercios/{id}/pedidos/{pedido_id}/pago-link` genera una preferencia MP y devuelve `{ preference_id, init_point, sandbox_init_point }`. Solo disponible para `owner` y `admin` cuando `payment_status === "pending_payment"`. También envía el link al cliente via WhatsApp automáticamente.
+
+### Botón "Link de pago" en PedidoDetalle
+Visible para `owner` y `admin` cuando `payment_status === "pending_payment"`. Al hacer clic genera el link de MP y lo muestra con un botón de "Copiar" que confirma visualmente la acción (ícono de check por 2 segundos).

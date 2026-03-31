@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.models.account import User, UserBusiness
 from app.models.customer import Customer
 from app.models.order import Incident, Order, OrderItem, OrderStatusHistory
+from app.services.notificaciones import notificar_cambio_estado, notificar_cancelacion
 from app.schemas.pedidos import (
     IncidentCreate,
     OrderAssignDelivery,
@@ -398,9 +399,24 @@ async def cambiar_estado(
         )
 
     await _registrar_historial(db, order, data.status, changed_by_id=user_id, note=data.note)
+    prev_phone = order.customer.phone
+    prev_delivery_type = order.delivery_type
+    prev_total = float(order.total_amount)
+    prev_number = order.order_number
     order.status = data.status
     await db.commit()
     await db.refresh(order)
+
+    # Notificación automática al cliente (fire-and-forget)
+    await notificar_cambio_estado(
+        business_id=business_id,
+        order_number=prev_number,
+        new_status=data.status,
+        delivery_type=prev_delivery_type,
+        customer_phone=prev_phone,
+        total_amount=prev_total,
+        db=db,
+    )
 
     return await obtener_pedido(db, business_id, order.id)
 
@@ -543,6 +559,10 @@ async def cancelar_pedido(
         if customer is not None:
             customer.credit_balance = float(customer.credit_balance) + float(order.total_amount)
 
+    prev_phone = order.customer.phone
+    prev_total = float(order.total_amount)
+    prev_number = order.order_number
+
     await _registrar_historial(
         db, order, "cancelled", changed_by_id=user_id, note=data.note
     )
@@ -550,6 +570,17 @@ async def cancelar_pedido(
     order.payment_status = payment_policy
     await db.commit()
     await db.refresh(order)
+
+    # Notificación automática al cliente
+    await notificar_cancelacion(
+        business_id=business_id,
+        order_number=prev_number,
+        payment_policy=payment_policy,
+        total_amount=prev_total,
+        customer_phone=prev_phone,
+        db=db,
+    )
+
     return await obtener_pedido(db, business_id, order.id)
 
 

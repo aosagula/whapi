@@ -38,6 +38,8 @@ class WhatsappNumber(Base):
     label: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
     # Nombre de sesión en WPPConnect
     session_name: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
+    # Token generado por WPPConnect para autenticar llamadas de esta sesión
+    wpp_token: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     status: Mapped[str] = mapped_column(
         WHATSAPP_STATUS_ENUM, default="disconnected", nullable=False
     )

@@ -80,6 +80,7 @@ async def test_agregar_numero_ok() -> None:
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
+        return_value=None,
     ):
         async with await _make_client() as client:
             dueno = await _registrar(client, "wa_add")
@@ -106,6 +107,7 @@ async def test_agregar_numero_duplicado() -> None:
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
+        return_value=None,
     ):
         async with await _make_client() as client:
             dueno = await _registrar(client, "wa_dup")
@@ -137,6 +139,7 @@ async def test_editar_etiqueta() -> None:
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
+        return_value=None,
     ):
         async with await _make_client() as client:
             dueno = await _registrar(client, "wa_edit")
@@ -168,9 +171,11 @@ async def test_eliminar_numero() -> None:
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
+        return_value=None,
     ), patch(
         "app.services.whatsapp._cerrar_sesion_wpp",
         new_callable=AsyncMock,
+        return_value=None,
     ):
         async with await _make_client() as client:
             dueno = await _registrar(client, "wa_del")

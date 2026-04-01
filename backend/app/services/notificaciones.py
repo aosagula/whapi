@@ -72,12 +72,12 @@ def _mensaje_link_pago(order_number: int, link: str) -> str:
 
 # ── Envío via WPPConnect ──────────────────────────────────────────────────────
 
-async def _obtener_session_name(
+async def _obtener_numero_activo(
     business_id: uuid.UUID,
     db: AsyncSession,
-) -> str | None:
+) -> WhatsappNumber | None:
     """
-    Obtiene el nombre de sesión WPPConnect del primer número activo y conectado del comercio.
+    Obtiene el primer número activo y conectado del comercio.
     Retorna None si no hay ninguno disponible.
     """
     result = await db.execute(
@@ -87,14 +87,14 @@ async def _obtener_session_name(
             WhatsappNumber.status == "connected",
         ).limit(1)
     )
-    numero = result.scalar_one_or_none()
-    return numero.session_name if numero else None
+    return result.scalar_one_or_none()
 
 
 async def enviar_mensaje_whatsapp(
     phone: str,
     message: str,
     session_name: str,
+    token: str | None = None,
 ) -> None:
     """
     Envía un mensaje de texto via WPPConnect.
@@ -104,13 +104,18 @@ async def enviar_mensaje_whatsapp(
         logger.debug("WPPConnect no configurado — mensaje no enviado a %s: %s", phone, message)
         return
 
+    # Priorizar token de sesión; fallback al secret key global
+    bearer = token or settings.WPPCONNECT_SECRET_KEY
     headers: dict[str, str] = {}
-    if settings.WPPCONNECT_SECRET_KEY:
-        headers["Authorization"] = f"Bearer {settings.WPPCONNECT_SECRET_KEY}"
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
 
     # WPPConnect espera el número en formato internacional sin '+'
     phone_normalized = phone.lstrip("+")
-    url = f"http://{settings.WPPCONNECT_HOST}:{settings.WPPCONNECT_PORT}/api/{session_name}/send-message"
+    host = settings.WPPCONNECT_HOST.rstrip("/")
+    if not (host.startswith("http://") or host.startswith("https://")):
+        host = f"http://{host}:{settings.WPPCONNECT_PORT}"
+    url = f"{host}/api/{session_name}/send-message"
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -139,11 +144,11 @@ async def notificar_cambio_estado(
     if not mensaje:
         return
 
-    session_name = await _obtener_session_name(business_id, db)
-    if not session_name:
+    numero = await _obtener_numero_activo(business_id, db)
+    if not numero or not numero.session_name:
         return
 
-    await enviar_mensaje_whatsapp(customer_phone, mensaje, session_name)
+    await enviar_mensaje_whatsapp(customer_phone, mensaje, numero.session_name, token=numero.wpp_token)
 
 
 async def notificar_cancelacion(
@@ -156,10 +161,10 @@ async def notificar_cancelacion(
 ) -> None:
     """Envía la notificación automática al cliente cuando se cancela un pedido."""
     mensaje = _mensaje_cancelacion(order_number, payment_policy, total_amount)
-    session_name = await _obtener_session_name(business_id, db)
-    if not session_name:
+    numero = await _obtener_numero_activo(business_id, db)
+    if not numero or not numero.session_name:
         return
-    await enviar_mensaje_whatsapp(customer_phone, mensaje, session_name)
+    await enviar_mensaje_whatsapp(customer_phone, mensaje, numero.session_name, token=numero.wpp_token)
 
 
 async def notificar_pago_confirmado(
@@ -170,10 +175,10 @@ async def notificar_pago_confirmado(
 ) -> None:
     """Notifica al cliente que su pago fue confirmado."""
     mensaje = _mensaje_pago_confirmado(order_number)
-    session_name = await _obtener_session_name(business_id, db)
-    if not session_name:
+    numero = await _obtener_numero_activo(business_id, db)
+    if not numero or not numero.session_name:
         return
-    await enviar_mensaje_whatsapp(customer_phone, mensaje, session_name)
+    await enviar_mensaje_whatsapp(customer_phone, mensaje, numero.session_name, token=numero.wpp_token)
 
 
 async def notificar_link_pago(
@@ -185,7 +190,7 @@ async def notificar_link_pago(
 ) -> None:
     """Envía al cliente el link de pago de MercadoPago."""
     mensaje = _mensaje_link_pago(order_number, link)
-    session_name = await _obtener_session_name(business_id, db)
-    if not session_name:
+    numero = await _obtener_numero_activo(business_id, db)
+    if not numero or not numero.session_name:
         return
-    await enviar_mensaje_whatsapp(customer_phone, mensaje, session_name)
+    await enviar_mensaje_whatsapp(customer_phone, mensaje, numero.session_name, token=numero.wpp_token)

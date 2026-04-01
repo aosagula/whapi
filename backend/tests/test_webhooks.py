@@ -91,6 +91,7 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
+        return_value=None,
     ):
         async with await _make_client() as client:
             comercio, token = await _setup_comercio(client, "wh_msg")

@@ -17,8 +17,15 @@ from app.schemas.whatsapp import WhatsappNumberCreate, WhatsappNumberUpdate
 # ── Helpers WPPConnect ────────────────────────────────────────────────────────
 
 def _wpp_base() -> str:
-    """URL base del servidor WPPConnect."""
-    return f"http://{settings.WPPCONNECT_HOST}:{settings.WPPCONNECT_PORT}"
+    """
+    URL base del servidor WPPConnect.
+    Si el host ya incluye protocolo (http/https), se usa directamente.
+    Si no, se construye con el puerto configurado.
+    """
+    host = settings.WPPCONNECT_HOST.rstrip("/")
+    if host.startswith("http://") or host.startswith("https://"):
+        return host
+    return f"http://{host}:{settings.WPPCONNECT_PORT}"
 
 
 def _session_name_from_phone(phone: str) -> str:
@@ -30,22 +37,26 @@ def _session_name_from_phone(phone: str) -> str:
 async def _wpp_request(
     method: str,
     path: str,
-    session_name: str | None = None,
     json: dict | None = None,
+    token: str | None = None,
 ) -> dict:
     """
     Realiza una petición al servidor WPPConnect.
+    Usa el token de sesión como Bearer si está disponible;
+    si no, usa el secret key global.
     Retorna el body parseado o lanza HTTPException si WPPConnect no está disponible.
     """
-    base = _wpp_base()
     if not settings.WPPCONNECT_HOST:
         # WPPConnect no configurado — modo sin integración real
         return {}
 
-    # WPPConnect requiere token por sesión en el header
+    base = _wpp_base()
+
+    # Priorizar token de sesión; fallback al secret key global
+    bearer = token or settings.WPPCONNECT_SECRET_KEY
     headers: dict[str, str] = {}
-    if settings.WPPCONNECT_SECRET_KEY:
-        headers["Authorization"] = f"Bearer {settings.WPPCONNECT_SECRET_KEY}"
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
 
     url = f"{base}{path}"
     try:
@@ -65,23 +76,78 @@ async def _wpp_request(
         ) from exc
 
 
-async def _iniciar_sesion_wpp(session_name: str) -> None:
-    """Inicia una sesión WPPConnect (genera token y arranca la sesión)."""
-    # Generar token de sesión
-    await _wpp_request("POST", f"/api/{session_name}/generate-token")
-    # Iniciar sesión (quedará en estado 'scanning' esperando QR)
-    await _wpp_request("POST", f"/api/{session_name}/start-session")
+async def _generar_token_wpp(session_name: str) -> str | None:
+    """
+    Genera un token de sesión WPPConnect.
+    URL: POST /api/{session}/{secret}/generate-token
+    Retorna el token generado, o None si falla.
+    """
+    secret = settings.WPPCONNECT_SECRET_KEY or ""
+    data = await _wpp_request("POST", f"/api/{session_name}/{secret}/generate-token")
+    return data.get("token") or data.get("data", {}).get("token")
 
 
-async def _obtener_qr_wpp(session_name: str) -> str | None:
-    """Obtiene el QR base64 de una sesión WPPConnect."""
-    data = await _wpp_request("GET", f"/api/{session_name}/qrcode-session")
-    return data.get("qrcode") or data.get("data")
+async def _iniciar_sesion_wpp(session_name: str) -> str | None:
+    """
+    Inicia una sesión WPPConnect (genera token y arranca la sesión).
+    Retorna el token generado para persistir en el modelo.
+    """
+    token = await _generar_token_wpp(session_name)
+    # Iniciar sesión pasando el token generado como Bearer (quedará en 'scanning' esperando QR)
+    await _wpp_request(
+        "POST",
+        f"/api/{session_name}/start-session",
+        json={"webhook": "", "waitQrCode": False},
+        token=token,
+    )
+    return token
 
 
-async def _obtener_status_wpp(session_name: str) -> str:
+async def _obtener_qr_wpp(session_name: str, token: str | None = None) -> str | None:
+    """
+    Obtiene el QR de una sesión WPPConnect.
+    WPPConnect puede devolver la imagen PNG directamente o un JSON con el base64.
+    """
+    if not settings.WPPCONNECT_HOST:
+        return None
+
+    import base64
+
+    base = _wpp_base()
+    bearer = token or settings.WPPCONNECT_SECRET_KEY
+    headers: dict[str, str] = {}
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+
+    url = f"{base}/api/{session_name}/qrcode-session"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+
+            content_type = resp.headers.get("content-type", "")
+            if "image" in content_type:
+                # Respuesta binaria PNG → convertir a base64 data URI
+                return "data:image/png;base64," + base64.b64encode(resp.content).decode()
+
+            # Respuesta JSON
+            data = resp.json()
+            return data.get("qrcode") or data.get("data")
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de WPPConnect: {exc.response.status_code}",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo conectar con el servidor de WhatsApp",
+        ) from exc
+
+
+async def _obtener_status_wpp(session_name: str, token: str | None = None) -> str:
     """Consulta el estado de la sesión en WPPConnect."""
-    data = await _wpp_request("GET", f"/api/{session_name}/status-session")
+    data = await _wpp_request("GET", f"/api/{session_name}/status-session", token=token)
     raw = (data.get("status") or data.get("session", {}).get("status") or "").lower()
     if "connected" in raw or "islogged" in raw:
         return "connected"
@@ -90,9 +156,9 @@ async def _obtener_status_wpp(session_name: str) -> str:
     return "disconnected"
 
 
-async def _cerrar_sesion_wpp(session_name: str) -> None:
+async def _cerrar_sesion_wpp(session_name: str, token: str | None = None) -> None:
     """Cierra y desconecta la sesión WPPConnect."""
-    await _wpp_request("POST", f"/api/{session_name}/logout-session")
+    await _wpp_request("POST", f"/api/{session_name}/logout-session", token=token)
 
 
 # ── CRUD WhatsappNumber ───────────────────────────────────────────────────────
@@ -145,9 +211,11 @@ async def agregar_numero(
     db.add(numero)
     await db.flush()
 
-    # Iniciar sesión en WPPConnect (si está configurado)
+    # Iniciar sesión en WPPConnect (si está configurado) y persistir token
     if settings.WPPCONNECT_HOST:
-        await _iniciar_sesion_wpp(session_name)
+        token = await _iniciar_sesion_wpp(session_name)
+        if token:
+            numero.wpp_token = token
 
     await db.commit()
     await db.refresh(numero)
@@ -167,11 +235,11 @@ async def obtener_qr(
     qr = None
 
     if settings.WPPCONNECT_HOST and numero.session_name:
-        status_wpp = await _obtener_status_wpp(numero.session_name)
+        status_wpp = await _obtener_status_wpp(numero.session_name, token=numero.wpp_token)
         numero.status = status_wpp  # type: ignore[assignment]
 
         if status_wpp == "scanning":
-            qr = await _obtener_qr_wpp(numero.session_name)
+            qr = await _obtener_qr_wpp(numero.session_name, token=numero.wpp_token)
 
         await db.commit()
         await db.refresh(numero)
@@ -194,8 +262,10 @@ async def reconectar_numero(
     numero.status = "scanning"  # type: ignore[assignment]
 
     if settings.WPPCONNECT_HOST and numero.session_name:
-        await _iniciar_sesion_wpp(numero.session_name)
-        qr = await _obtener_qr_wpp(numero.session_name)
+        token = await _iniciar_sesion_wpp(numero.session_name)
+        if token:
+            numero.wpp_token = token
+        qr = await _obtener_qr_wpp(numero.session_name, token=numero.wpp_token)
 
     await db.commit()
     await db.refresh(numero)
@@ -235,7 +305,7 @@ async def eliminar_numero(
     if settings.WPPCONNECT_HOST and numero.session_name:
         # Intentar cerrar sesión; si falla no bloqueamos la eliminación
         try:
-            await _cerrar_sesion_wpp(numero.session_name)
+            await _cerrar_sesion_wpp(numero.session_name, token=numero.wpp_token)
         except HTTPException:
             pass
 

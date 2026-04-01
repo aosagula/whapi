@@ -128,7 +128,9 @@ export default function LandingPage() {
             <div className="rounded-2xl overflow-hidden shadow-2xl border border-brand/10">
               <video
                 src="/whapi.mp4"
-                controls
+                autoPlay
+                loop
+                muted
                 playsInline
                 className="w-full"
               />

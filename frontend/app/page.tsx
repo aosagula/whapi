@@ -75,7 +75,7 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* ── Hero ───────────────────────────────────────────── */}
+      {/* ── Hero + Video ───────────────────────────────────── */}
       <section
         className="relative overflow-hidden"
         style={{ background: "linear-gradient(160deg, #fff8f0 0%, #ffe8d2 100%)" }}
@@ -92,54 +92,48 @@ export default function LandingPage() {
             right: -100,
           }}
         />
-        <div className="max-w-6xl mx-auto px-6 py-24 md:py-32 text-center relative">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-brand-pale border border-brand/20 text-brand text-sm font-semibold px-4 py-2 rounded-full mb-8">
-            <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
-            Plataforma multi-tenant para comercios gastronómicos
+        <div className="max-w-6xl mx-auto px-6 py-20 md:py-28 relative">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Columna izquierda: texto */}
+            <div>
+              <div className="inline-flex items-center gap-2 bg-brand-pale border border-brand/20 text-brand text-sm font-semibold px-4 py-2 rounded-full mb-8">
+                <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+                Plataforma multi-tenant para comercios gastronómicos
+              </div>
+
+              <h1 className="font-serif text-5xl md:text-6xl text-brown leading-tight mb-6">
+                Pedidos por WhatsApp,{" "}
+                <span className="text-brand italic">sin complicaciones</span>
+              </h1>
+
+              <p className="text-brown-mid text-lg md:text-xl mb-10 leading-relaxed">
+                Tu pizzería recibe y gestiona pedidos automáticamente por WhatsApp. Un chatbot con IA
+                atiende a tus clientes 24/7 y tu equipo lo controla todo desde un panel en tiempo real.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <Link href="/registro">
+                  <button className="btn-primary text-base px-8 py-4 flex items-center gap-2">
+                    Empezar gratis
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </Link>
+                <Link href="/login">
+                  <button className="btn-outline text-base px-8 py-4">Iniciar sesión</button>
+                </Link>
+              </div>
+            </div>
+
+            {/* Columna derecha: video */}
+            <div className="rounded-2xl overflow-hidden shadow-2xl border border-brand/10">
+              <video
+                src="/whapi.mp4"
+                controls
+                playsInline
+                className="w-full"
+              />
+            </div>
           </div>
-
-          <h1 className="font-serif text-5xl md:text-7xl text-brown leading-tight mb-6">
-            Pedidos por WhatsApp,{" "}
-            <span className="text-brand italic">sin complicaciones</span>
-          </h1>
-
-          <p className="text-brown-mid text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            Tu pizzería recibe y gestiona pedidos automáticamente por WhatsApp. Un chatbot con IA
-            atiende a tus clientes 24/7 y tu equipo lo controla todo desde un panel en tiempo real.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/registro">
-              <button className="btn-primary text-base px-8 py-4 flex items-center gap-2">
-                Empezar gratis
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </Link>
-            <Link href="/login">
-              <button className="btn-outline text-base px-8 py-4">Ver demo</button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Video demo ─────────────────────────────────────── */}
-      <section className="max-w-5xl mx-auto px-6 py-16">
-        <div className="text-center mb-10">
-          <h2 className="font-serif text-3xl md:text-4xl text-brown mb-3">
-            Mirá cómo funciona
-          </h2>
-          <p className="text-brown-mid text-lg">
-            Del pedido por WhatsApp al panel de gestión, todo en un solo lugar.
-          </p>
-        </div>
-        <div className="rounded-2xl overflow-hidden shadow-xl border border-border">
-          <video
-            src="/whapi.mp4"
-            controls
-            playsInline
-            className="w-full"
-          />
         </div>
       </section>
 

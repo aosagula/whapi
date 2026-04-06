@@ -1,0 +1,160 @@
+{
+  "name": "Whapi — Agente Pedido",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "agente",
+      "name": "Agente Pedido",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [560, 300],
+      "parameters": {
+        "agentType": "toolsAgent",
+        "text": "={{ $json.instruccion }}",
+        "systemMessage": "Sos el gestor del carrito de compras de la pizzería. Tu trabajo es ejecutar las acciones sobre el pedido del cliente.\n\nContexto:\n- business_id: {{ $json.business_id }}\n- customer_id: {{ $json.customer_id }}\n- session_id: {{ $json.session_id }}\n- order_id actual: {{ $json.order_id || 'ninguno — crear con crear_pedido primero' }}\n\nHerramientas disponibles:\n- crear_pedido: crear un pedido nuevo si no hay ninguno activo\n- ver_carrito: ver el resumen del pedido actual\n- agregar_item: agregar un ítem al pedido (requiere product_id o combo_id, quantity, unit_price, y opcionalmente variant)\n- quitar_item: quitar un ítem del pedido (requiere item_id)\n- confirmar_pedido: confirmar el pedido cuando el cliente da el OK (requiere delivery_type y delivery_address si es delivery)\n\nReglas:\n- Si no hay order_id, usá crear_pedido antes de agregar ítems.\n- Para mitad y mitad, agregá el ítem como una pizza con variant: {\"half1\": \"código_1\", \"half2\": \"código_2\", \"size\": \"large\"}.\n- Siempre confirmá las acciones con un resumen claro.\n- Si el pedido se confirma con éxito, informalo explícitamente en tu respuesta con el texto PEDIDO_CONFIRMADO.\n- Respondé en español.",
+        "hasOutputParser": false,
+        "options": { "maxIterations": 6 }
+      }
+    },
+    {
+      "id": "llm",
+      "name": "GPT-4o Pedido",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [400, 500],
+      "parameters": {
+        "model": "gpt-4o",
+        "options": { "temperature": 0.1 }
+      },
+      "credentials": {
+        "openAiApi": { "id": "REEMPLAZAR_CON_ID_CREDENCIAL_OPENAI", "name": "OpenAI API" }
+      }
+    },
+    {
+      "id": "tool-crear",
+      "name": "crear_pedido",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [200, 600],
+      "parameters": {
+        "name": "crear_pedido",
+        "description": "Crea un nuevo pedido borrador para el cliente. Usá esta herramienta cuando no hay un order_id activo. Requiere delivery_type (delivery o pickup) y opcionalmente delivery_address.",
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Execute Workflow Trigger').item.json.business_id }}/pedidos",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ customer_id: $('Execute Workflow Trigger').item.json.customer_id, session_id: $('Execute Workflow Trigger').item.json.session_id, delivery_type: $fromAI('delivery_type', 'delivery o pickup'), delivery_address: $fromAI('delivery_address', 'Dirección de entrega, null si es pickup') }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "tool-ver",
+      "name": "ver_carrito",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [440, 600],
+      "parameters": {
+        "name": "ver_carrito",
+        "description": "Muestra el resumen completo del pedido actual con todos sus ítems y el total.",
+        "method": "GET",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Execute Workflow Trigger').item.json.business_id }}/pedidos/{{ $fromAI('order_id', 'ID del pedido actual') }}/resumen",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "tool-agregar",
+      "name": "agregar_item",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [680, 600],
+      "parameters": {
+        "name": "agregar_item",
+        "description": "Agrega un producto o combo al pedido. Requiere order_id, product_id o combo_id (uno de los dos), quantity y unit_price. Opcionalmente variant (JSON con size, half1, half2) y notes.",
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Execute Workflow Trigger').item.json.business_id }}/pedidos/{{ $fromAI('order_id', 'ID del pedido') }}/items",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ product_id: $fromAI('product_id', 'UUID del producto, null si es combo'), combo_id: $fromAI('combo_id', 'UUID del combo, null si es producto'), quantity: $fromAI('quantity', 'Cantidad'), unit_price: $fromAI('unit_price', 'Precio unitario'), variant: $fromAI('variant', 'Variante como objeto JSON, null si no aplica'), notes: $fromAI('notes', 'Notas del ítem, null si no hay') }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "tool-quitar",
+      "name": "quitar_item",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [920, 600],
+      "parameters": {
+        "name": "quitar_item",
+        "description": "Quita un ítem del pedido. Requiere order_id e item_id del ítem a eliminar.",
+        "method": "DELETE",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Execute Workflow Trigger').item.json.business_id }}/pedidos/{{ $fromAI('order_id', 'ID del pedido') }}/items/{{ $fromAI('item_id', 'ID del ítem a quitar') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "tool-confirmar",
+      "name": "confirmar_pedido",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1160, 600],
+      "parameters": {
+        "name": "confirmar_pedido",
+        "description": "Confirma el pedido cuando el cliente da su OK. Requiere order_id. Opcionalmente puede actualizar delivery_type y delivery_address.",
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Execute Workflow Trigger').item.json.business_id }}/pedidos/{{ $fromAI('order_id', 'ID del pedido a confirmar') }}/confirmar",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ delivery_type: $fromAI('delivery_type', 'delivery o pickup, null si no cambia'), delivery_address: $fromAI('delivery_address', 'Dirección de entrega, null si no cambia') }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{ "node": "Agente Pedido", "type": "main", "index": 0 }]]
+    },
+    "GPT-4o Pedido": {
+      "ai_languageModel": [[{ "node": "Agente Pedido", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "crear_pedido": {
+      "ai_tool": [[{ "node": "Agente Pedido", "type": "ai_tool", "index": 0 }]]
+    },
+    "ver_carrito": {
+      "ai_tool": [[{ "node": "Agente Pedido", "type": "ai_tool", "index": 0 }]]
+    },
+    "agregar_item": {
+      "ai_tool": [[{ "node": "Agente Pedido", "type": "ai_tool", "index": 0 }]]
+    },
+    "quitar_item": {
+      "ai_tool": [[{ "node": "Agente Pedido", "type": "ai_tool", "index": 0 }]]
+    },
+    "confirmar_pedido": {
+      "ai_tool": [[{ "node": "Agente Pedido", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

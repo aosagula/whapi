@@ -1,0 +1,115 @@
+{
+  "name": "Whapi — Notificaciones de Estado",
+  "nodes": [
+    {
+      "id": "webhook-notif",
+      "name": "Webhook Notificación",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whapi-notificacion",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "formatear-mensaje",
+      "name": "Formatear Mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "jsCode": "// Genera el mensaje de WhatsApp según el estado del pedido\n// El backend envía: { order_number, new_status, delivery_type, total_amount, customer_phone, session_name, wpp_token }\nconst {\n  order_number,\n  new_status,\n  delivery_type,\n  total_amount,\n  customer_phone,\n  customer_name,\n  session_name,\n  wpp_token,\n  mp_link,\n  credit_applied,\n  payment_policy,\n} = $input.item.json;\n\nconst nombre = customer_name ? ` ${customer_name}` : '';\n\nconst mensajes = {\n  pending_preparation: `✅ Tu pedido #${order_number} fue recibido${nombre}. ¡Ya estamos preparándolo!`,\n  in_preparation: `👨‍🍳 Tu pedido #${order_number} está en preparación. ¡Ya casi está listo!`,\n  to_dispatch: delivery_type === 'delivery'\n    ? `🛵 Tu pedido #${order_number} salió para tu domicilio. ¡En camino!`\n    : `🍕 Tu pedido #${order_number} está listo para retirar. ¡Te esperamos!`,\n  in_delivery: `🚀 Tu pedido #${order_number} está muy cerca. ¡Ya llega!`,\n  delivered: `🎉 ¡Tu pedido #${order_number} fue entregado${nombre}! Gracias por elegirnos. ¡Buen provecho!`,\n  with_incident: `⚠️ Tuvimos un inconveniente con tu pedido #${order_number}. Estamos resolviéndolo y te avisamos pronto.`,\n  cancelled_credit: `❌ Tu pedido #${order_number} fue cancelado. Tenés un crédito de $${parseFloat(total_amount || 0).toFixed(0)} para tu próximo pedido.`,\n  cancelled_refund: `❌ Tu pedido #${order_number} fue cancelado. El reembolso será procesado en breve.`,\n  cancelled_nocharge: `❌ Tu pedido #${order_number} fue cancelado. No se realizó ningún cobro.`,\n  pending_payment_mp: mp_link ? `💳 Tu pedido #${order_number} está confirmado. Pagá por MercadoPago:\\n${mp_link}` : null,\n};\n\n// Determinar qué mensaje usar\nlet mensaje = null;\nif (new_status === 'cancelled') {\n  if (payment_policy === 'credit') mensaje = mensajes.cancelled_credit;\n  else if (payment_policy === 'refunded') mensaje = mensajes.cancelled_refund;\n  else mensaje = mensajes.cancelled_nocharge;\n} else if (new_status === 'pending_payment' && mp_link) {\n  mensaje = mensajes.pending_payment_mp;\n} else {\n  mensaje = mensajes[new_status] || null;\n}\n\nif (!mensaje || !session_name || !customer_phone) {\n  return [{ json: { skip: true, motivo: `Sin mensaje para estado ${new_status}` } }];\n}\n\nreturn [{ json: { mensaje, customer_phone, session_name, wpp_token, skip: false } }];"
+      }
+    },
+    {
+      "id": "check-skip",
+      "name": "¿Enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "enviar-notif",
+      "name": "Enviar por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WPPCONNECT_HOST }}/api/{{ $json.session_name }}/send-message",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "phone", "value": "={{ $json.customer_phone }}@c.us" },
+            { "name": "message", "value": "={{ $json.mensaje }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $json.wpp_token }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "resp-ok",
+      "name": "OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1160, 200],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      }
+    },
+    {
+      "id": "resp-skip",
+      "name": "Skip",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 400],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "SKIP",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Notificación": {
+      "main": [[{ "node": "Formatear Mensaje", "type": "main", "index": 0 }]]
+    },
+    "Formatear Mensaje": {
+      "main": [[{ "node": "¿Enviar?", "type": "main", "index": 0 }]]
+    },
+    "¿Enviar?": {
+      "main": [
+        [{ "node": "Enviar por WhatsApp", "type": "main", "index": 0 }],
+        [{ "node": "Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar por WhatsApp": {
+      "main": [[{ "node": "OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # n8n
     N8N_HOST: str = ""
     N8N_PORT: int = 443
+    N8N_API_KEY: str = ""  # Clave interna para autenticar llamadas de n8n al backend
 
     # MercadoPago
     MERCADOPAGO_ACCESS_TOKEN: str = ""

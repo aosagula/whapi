@@ -17,6 +17,7 @@ from app.api.pagos import router as pagos_router
 from app.api.webhooks import router as webhooks_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.health import router as health_router
+from app.api.n8n import router as n8n_router
 from app.api.pedidos import router as pedidos_router
 from app.core.config import settings
 from app.core.db import AsyncSessionLocal
@@ -62,3 +63,4 @@ app.include_router(conversaciones_router)
 app.include_router(whatsapp_router)
 app.include_router(pagos_router)
 app.include_router(webhooks_router)
+app.include_router(n8n_router)

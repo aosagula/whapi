@@ -1,0 +1,164 @@
+{
+  "name": "Whapi — Timer de Inactividad",
+  "nodes": [
+    {
+      "id": "cron",
+      "name": "Cron cada 2 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 2 }]
+        }
+      }
+    },
+    {
+      "id": "buscar-inactivas",
+      "name": "Buscar Sesiones Inactivas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/sesiones/inactivas",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "minutos", "value": "10" }]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "check-hay",
+      "name": "¿Hay inactivas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-len",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "split",
+      "name": "Por cada sesión",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [920, 200],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "redactar-mensaje",
+      "name": "Redactar Mensaje de Consulta",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1160, 200],
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": { "__rl": true, "value": "gpt-4o-mini", "mode": "list" },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sos el asistente virtual de una pizzería. Redactá un mensaje corto y amigable para consultar a un cliente si quiere continuar con su pedido que quedó sin terminar. Usá el nombre del cliente si está disponible. Sé cálido, no invasivo. Máximo 2 oraciones."
+            },
+            {
+              "role": "user",
+              "content": "Cliente: {{ $json.customer_name || 'sin nombre' }}. Tiene un pedido #{{ $json.order_number }} en curso y no escribió en los últimos 10 minutos. Generá el mensaje."
+            }
+          ]
+        },
+        "options": { "temperature": 0.6 }
+      },
+      "credentials": {
+        "openAiApi": { "id": "REEMPLAZAR_CON_ID_CREDENCIAL_OPENAI", "name": "OpenAI API" }
+      }
+    },
+    {
+      "id": "enviar-consulta",
+      "name": "Enviar Consulta por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WPPCONNECT_HOST }}/api/{{ $('Por cada sesión').item.json.session_name }}/send-message",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "phone", "value": "={{ $('Por cada sesión').item.json.customer_phone }}@c.us" },
+            { "name": "message", "value": "={{ $json.message.content }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Por cada sesión').item.json.wpp_token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "volver",
+      "name": "Siguiente sesión",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1640, 200],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Cron cada 2 minutos": {
+      "main": [[{ "node": "Buscar Sesiones Inactivas", "type": "main", "index": 0 }]]
+    },
+    "Buscar Sesiones Inactivas": {
+      "main": [[{ "node": "¿Hay inactivas?", "type": "main", "index": 0 }]]
+    },
+    "¿Hay inactivas?": {
+      "main": [
+        [{ "node": "Por cada sesión", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Por cada sesión": {
+      "main": [
+        [{ "node": "Redactar Mensaje de Consulta", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Redactar Mensaje de Consulta": {
+      "main": [[{ "node": "Enviar Consulta por WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Enviar Consulta por WhatsApp": {
+      "main": [[{ "node": "Siguiente sesión", "type": "main", "index": 0 }]]
+    },
+    "Siguiente sesión": {
+      "main": [[{ "node": "Por cada sesión", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,451 @@
+{
+  "name": "Whapi — Chatbot Principal",
+  "nodes": [
+    {
+      "id": "webhook-wpp",
+      "name": "Webhook WPPConnect",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whapi-chatbot",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "extraer-datos",
+      "name": "Extraer Datos del Mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "jsCode": "// Extrae número del remitente (cliente) y destino (comercio)\n// El webhook de WPPConnect envía el payload en data.data o directamente\nconst payload = $input.item.json;\nconst data = payload.data || payload;\n\n// Número del cliente (remitente)\nconst fromRaw = data.from || data.sender?.id || '';\nconst clientePhone = fromRaw.replace('@c.us', '').replace(/^\\+/, '');\n\n// Número del comercio (destino del mensaje)\nconst toRaw = data.to || data.session || '';\nconst comercioPhone = toRaw.replace('@c.us', '').replace(/^\\+/, '');\n\n// Contenido del mensaje\nconst mensaje = data.body || data.content || data.text || '';\nconst tipoMensaje = data.type || 'chat';\n\n// Solo procesamos mensajes de texto\nif (tipoMensaje !== 'chat' && tipoMensaje !== 'text') {\n  return [{ json: { skip: true, motivo: 'Tipo de mensaje no soportado: ' + tipoMensaje } }];\n}\n\nif (!clientePhone || !comercioPhone || !mensaje.trim()) {\n  return [{ json: { skip: true, motivo: 'Datos de mensaje incompletos' } }];\n}\n\nreturn [{ json: { clientePhone, comercioPhone, mensaje, skip: false } }];"
+      }
+    },
+    {
+      "id": "check-skip",
+      "name": "¿Procesar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "resolver-tenant",
+      "name": "Resolver Tenant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/resolver-tenant",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "numero", "value": "={{ $('Extraer Datos del Mensaje').item.json.comercioPhone }}" }]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "check-tenant",
+      "name": "¿Tenant encontrado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1160, 200],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-tenant",
+              "leftValue": "={{ $json.business_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "cargar-contexto",
+      "name": "Cargar Contexto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Resolver Tenant').item.json.business_id }}/contexto",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "phone", "value": "={{ $('Extraer Datos del Mensaje').item.json.clientePhone }}" }]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "check-hitl",
+      "name": "¿Bot activo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1640, 100],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-bot",
+              "leftValue": "={{ $json.session_status }}",
+              "rightValue": "active_bot",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "guardar-msg-cliente",
+      "name": "Guardar Mensaje Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1880, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Cargar Contexto').item.json.business_id }}/mensajes",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "session_id", "value": "={{ $('Cargar Contexto').item.json.session_id }}" },
+            { "name": "direction", "value": "inbound" },
+            { "name": "content", "value": "={{ $('Extraer Datos del Mensaje').item.json.mensaje }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "construir-prompt",
+      "name": "Construir System Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2120, 0],
+      "parameters": {
+        "jsCode": "const ctx = $('Cargar Contexto').item.json;\nconst cliente = ctx.customer;\nconst pedido = ctx.active_order;\nconst mensajes = ctx.recent_messages || [];\n\n// Historial de conversación para el contexto del agente\nconst historial = mensajes.map(m => `[${m.direction === 'inbound' ? 'Cliente' : 'Bot'}]: ${m.content}`).join('\\n');\n\n// Resumen del pedido en curso\nlet resumenPedido = 'Sin pedido activo.';\nif (pedido) {\n  const items = pedido.items.map(i => `  - ${i.quantity}x ${i.product_name || 'Ítem'} $${i.subtotal.toFixed(2)}`).join('\\n');\n  resumenPedido = `Pedido #${pedido.order_number} (${pedido.status}):\\n${items}\\nTotal: $${pedido.total_amount.toFixed(2)}`;\n  if (pedido.delivery_type === 'delivery' && pedido.delivery_address) {\n    resumenPedido += `\\nEntrega en: ${pedido.delivery_address}`;\n  }\n}\n\nconst systemPrompt = `Sos el asistente virtual de ${ctx.business_name}, una pizzería. Tu rol es ayudar a los clientes a hacer sus pedidos de forma amigable y eficiente.\n\nDatos del cliente:\n- Nombre: ${cliente.name || 'No registrado aún'}\n- Teléfono: ${cliente.phone}\n- Dirección guardada: ${cliente.address || 'Ninguna'}\n- Crédito disponible: $${cliente.credit_balance.toFixed(2)}\n\nEstado actual del pedido:\n${resumenPedido}\n\nHistorial reciente de la conversación:\n${historial || 'Sin mensajes previos.'}\n\nInstrucciones:\n- Si el cliente no tiene nombre, preguntáselo al inicio.\n- Usá el catálogo cuando el cliente pregunte por productos o precios. Llamá a la herramienta consultar_catalogo.\n- Para agregar o quitar ítems del pedido, usá la herramienta gestionar_pedido.\n- Para actualizar el nombre o dirección del cliente, usá actualizar_cliente con los IDs: cliente_id=${cliente.customer_id}.\n- Cuando el cliente confirme el pedido, usá gestionar_pedido para confirmarlo.\n- Si el cliente elige el método de pago, usá la herramienta procesar_pago con pedido_id=${pedido?.order_id || 'null'}.\n- Si detectás frustración, confusión repetida o pedido explícito de hablar con una persona, usá derivar_humano con session_id=${ctx.session_id}.\n- IDs de contexto — business_id: ${ctx.business_id}, session_id: ${ctx.session_id}, customer_id: ${cliente.customer_id}, order_id: ${pedido?.order_id || 'null'}\n- Nunca inventes precios: usá siempre el catálogo.\n- Respondé siempre en español, con tono cálido y servicial.`;\n\nreturn [{ json: { systemPrompt, business_id: ctx.business_id, session_id: ctx.session_id, customer_id: cliente.customer_id, order_id: pedido?.order_id || null, mensaje: $('Extraer Datos del Mensaje').item.json.mensaje } }];"
+      }
+    },
+    {
+      "id": "orquestador",
+      "name": "Orquestador",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [2360, 0],
+      "parameters": {
+        "agentType": "toolsAgent",
+        "text": "={{ $json.mensaje }}",
+        "systemMessage": "={{ $json.systemPrompt }}",
+        "hasOutputParser": false,
+        "options": {
+          "maxIterations": 8,
+          "returnIntermediateSteps": false
+        }
+      }
+    },
+    {
+      "id": "llm-orquestador",
+      "name": "GPT-4o Orquestador",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [2200, 200],
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "credentials": {
+        "openAiApi": { "id": "REEMPLAZAR_CON_ID_CREDENCIAL_OPENAI", "name": "OpenAI API" }
+      }
+    },
+    {
+      "id": "memory-orquestador",
+      "name": "Memoria Conversacional",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [2360, 200],
+      "parameters": {
+        "sessionKey": "={{ $('Cargar Contexto').item.json.session_id }}",
+        "contextWindowLength": 20
+      }
+    },
+    {
+      "id": "tool-catalogo",
+      "name": "consultar_catalogo",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [2120, 400],
+      "parameters": {
+        "name": "consultar_catalogo",
+        "description": "Consulta el catálogo de productos y combos del comercio. Usá esta herramienta cuando el cliente pregunta por productos, precios, ingredientes o disponibilidad.",
+        "workflowId": { "__rl": true, "value": "REEMPLAZAR_CON_ID_AGENTE_CATALOGO", "mode": "id" },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ $fromAI('query', 'La consulta del cliente sobre el catálogo') }}",
+            "business_id": "={{ $('Construir System Prompt').item.json.business_id }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "tool-pedido",
+      "name": "gestionar_pedido",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [2360, 400],
+      "parameters": {
+        "name": "gestionar_pedido",
+        "description": "Gestiona el carrito de compras: agregar ítems, quitar ítems, ver el resumen o confirmar el pedido. Usá esta herramienta cuando el cliente quiere agregar productos, modificar su pedido, ver el resumen o confirmar la compra.",
+        "workflowId": { "__rl": true, "value": "REEMPLAZAR_CON_ID_AGENTE_PEDIDO", "mode": "id" },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "instruccion": "={{ $fromAI('instruccion', 'Qué quiere hacer el cliente con su pedido') }}",
+            "business_id": "={{ $('Construir System Prompt').item.json.business_id }}",
+            "customer_id": "={{ $('Construir System Prompt').item.json.customer_id }}",
+            "session_id": "={{ $('Construir System Prompt').item.json.session_id }}",
+            "order_id": "={{ $('Construir System Prompt').item.json.order_id }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "tool-cliente",
+      "name": "actualizar_cliente",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [2600, 400],
+      "parameters": {
+        "name": "actualizar_cliente",
+        "description": "Actualiza el nombre y/o dirección del cliente. Usá esta herramienta cuando el cliente dice su nombre por primera vez o actualiza su dirección.",
+        "method": "PATCH",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/clientes/{{ $('Construir System Prompt').item.json.customer_id }}",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $fromAI('name', 'Nombre del cliente, null si no cambia'), address: $fromAI('address', 'Dirección del cliente, null si no cambia') }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "tool-pago",
+      "name": "procesar_pago",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [2840, 400],
+      "parameters": {
+        "name": "procesar_pago",
+        "description": "Registra el método de pago elegido por el cliente (mercadopago, cash o transfer). Si el método es mercadopago, retorna el link de pago. Usá esta herramienta luego de que el cliente confirme el pedido y elija cómo pagar.",
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Construir System Prompt').item.json.business_id }}/pedidos/{{ $('Construir System Prompt').item.json.order_id }}/pago",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ method: $fromAI('method', 'Método de pago: mercadopago, cash o transfer'), credit_to_apply: $fromAI('credit_to_apply', 'Monto de crédito a aplicar, 0 si no usa crédito') }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "tool-hitl",
+      "name": "derivar_humano",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [3080, 400],
+      "parameters": {
+        "name": "derivar_humano",
+        "description": "Deriva la conversación a un operador humano y pausa el bot. Usá esta herramienta cuando el cliente pide hablar con una persona, está frustrado o tiene un problema que el bot no puede resolver.",
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/conversaciones/{{ $('Construir System Prompt').item.json.session_id }}/derivar",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={ \"session_id\": \"{{ $('Construir System Prompt').item.json.session_id }}\", \"motivo\": \"{{ $fromAI('motivo', 'Motivo de la derivación') }}\" }",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    },
+    {
+      "id": "guardar-resp-bot",
+      "name": "Guardar Respuesta Bot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Cargar Contexto').item.json.business_id }}/mensajes",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "session_id", "value": "={{ $('Cargar Contexto').item.json.session_id }}" },
+            { "name": "direction", "value": "outbound" },
+            { "name": "content", "value": "={{ $('Orquestador').item.json.output }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "enviar-whatsapp",
+      "name": "Enviar por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2840, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WPPCONNECT_HOST }}/api/{{ $('Resolver Tenant').item.json.session_name }}/send-message",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "phone", "value": "={{ $('Extraer Datos del Mensaje').item.json.clientePhone }}@c.us" },
+            { "name": "message", "value": "={{ $('Orquestador').item.json.output }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $('Resolver Tenant').item.json.wpp_token }}" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-ok",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3080, 0],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-skip",
+      "name": "Responder Skip",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 400],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "SKIP",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook WPPConnect": {
+      "main": [[{ "node": "Extraer Datos del Mensaje", "type": "main", "index": 0 }]]
+    },
+    "Extraer Datos del Mensaje": {
+      "main": [[{ "node": "¿Procesar?", "type": "main", "index": 0 }]]
+    },
+    "¿Procesar?": {
+      "main": [
+        [{ "node": "Resolver Tenant", "type": "main", "index": 0 }],
+        [{ "node": "Responder Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Resolver Tenant": {
+      "main": [[{ "node": "¿Tenant encontrado?", "type": "main", "index": 0 }]]
+    },
+    "¿Tenant encontrado?": {
+      "main": [
+        [{ "node": "Cargar Contexto", "type": "main", "index": 0 }],
+        [{ "node": "Responder Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cargar Contexto": {
+      "main": [[{ "node": "¿Bot activo?", "type": "main", "index": 0 }]]
+    },
+    "¿Bot activo?": {
+      "main": [
+        [{ "node": "Guardar Mensaje Cliente", "type": "main", "index": 0 }],
+        [{ "node": "Responder Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Guardar Mensaje Cliente": {
+      "main": [[{ "node": "Construir System Prompt", "type": "main", "index": 0 }]]
+    },
+    "Construir System Prompt": {
+      "main": [[{ "node": "Orquestador", "type": "main", "index": 0 }]]
+    },
+    "Orquestador": {
+      "main": [[{ "node": "Guardar Respuesta Bot", "type": "main", "index": 0 }]]
+    },
+    "Guardar Respuesta Bot": {
+      "main": [[{ "node": "Enviar por WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Enviar por WhatsApp": {
+      "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]]
+    },
+    "GPT-4o Orquestador": {
+      "ai_languageModel": [[{ "node": "Orquestador", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Conversacional": {
+      "ai_memory": [[{ "node": "Orquestador", "type": "ai_memory", "index": 0 }]]
+    },
+    "consultar_catalogo": {
+      "ai_tool": [[{ "node": "Orquestador", "type": "ai_tool", "index": 0 }]]
+    },
+    "gestionar_pedido": {
+      "ai_tool": [[{ "node": "Orquestador", "type": "ai_tool", "index": 0 }]]
+    },
+    "actualizar_cliente": {
+      "ai_tool": [[{ "node": "Orquestador", "type": "ai_tool", "index": 0 }]]
+    },
+    "procesar_pago": {
+      "ai_tool": [[{ "node": "Orquestador", "type": "ai_tool", "index": 0 }]]
+    },
+    "derivar_humano": {
+      "ai_tool": [[{ "node": "Orquestador", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

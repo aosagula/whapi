@@ -1,0 +1,71 @@
+{
+  "name": "Whapi — Agente Catálogo",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "agente",
+      "name": "Agente Catálogo",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [560, 300],
+      "parameters": {
+        "agentType": "toolsAgent",
+        "text": "={{ $json.query }}",
+        "systemMessage": "Sos el experto en el catálogo de la pizzería. Tu único trabajo es responder preguntas sobre productos, precios, variantes y combos disponibles.\n\nCuando necesites información del catálogo, usá la herramienta obtener_catalogo con business_id={{ $json.business_id }}.\n\nReglas:\n- Solo respondés sobre el catálogo. Si preguntan otra cosa, decí que no es tu área.\n- Sé conciso y claro. Si hay muchos productos, organizalos por categoría.\n- Si un producto no está disponible, no lo menciones.\n- Calculá precios correctamente (docenas, mitad y mitad con recargo).\n- Respondé siempre en español.",
+        "hasOutputParser": false,
+        "options": { "maxIterations": 3 }
+      }
+    },
+    {
+      "id": "llm",
+      "name": "GPT-4o Catálogo",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [400, 500],
+      "parameters": {
+        "model": "gpt-4o",
+        "options": { "temperature": 0.2 }
+      },
+      "credentials": {
+        "openAiApi": { "id": "REEMPLAZAR_CON_ID_CREDENCIAL_OPENAI", "name": "OpenAI API" }
+      }
+    },
+    {
+      "id": "tool-catalogo",
+      "name": "obtener_catalogo",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [720, 500],
+      "parameters": {
+        "name": "obtener_catalogo",
+        "description": "Obtiene el catálogo completo del comercio: productos disponibles con precios y combos.",
+        "method": "GET",
+        "url": "={{ $env.WHAPI_BACKEND_URL }}/n8n/comercios/{{ $('Execute Workflow Trigger').item.json.business_id }}/catalogo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Api-Key", "value": "={{ $env.WHAPI_N8N_API_KEY }}" }]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{ "node": "Agente Catálogo", "type": "main", "index": 0 }]]
+    },
+    "GPT-4o Catálogo": {
+      "ai_languageModel": [[{ "node": "Agente Catálogo", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "obtener_catalogo": {
+      "ai_tool": [[{ "node": "Agente Catálogo", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

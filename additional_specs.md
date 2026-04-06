@@ -229,3 +229,45 @@ Si `MERCADOPAGO_ACCESS_TOKEN` está vacío, `crear_preferencia` devuelve un link
 
 ### Botón "Link de pago" en PedidoDetalle
 Visible para `owner` y `admin` cuando `payment_status === "pending_payment"`. Al hacer clic genera el link de MP y lo muestra con un botón de "Copiar" que confirma visualmente la acción (ícono de check por 2 segundos).
+
+---
+
+## Fase 11 — Arquitectura multi-agente n8n
+
+### Patrón Orquestador + Agentes especializados
+
+La especificación original planteaba n8n como un orquestador simple con un único LLM. Se decidió implementar una arquitectura de múltiples agentes:
+
+- **Orquestador** (`chatbot-principal`): AI Agent GPT-4o con memoria conversacional (Window Buffer Memory keyed por session_id). Decide qué agente invocar según el contexto.
+- **Agente Catálogo** (`agente-catalogo`): AI Agent especializado, stateless. Herramientas: `obtener_catalogo`.
+- **Agente Pedido** (`agente-pedido`): AI Agent especializado, stateless. Herramientas: `crear_pedido`, `ver_carrito`, `agregar_item`, `quitar_item`, `confirmar_pedido`.
+- **Herramientas simples** (sin LLM, directamente en el orquestador): `actualizar_cliente`, `procesar_pago`, `derivar_humano`.
+
+### Router interno `/n8n/` en el backend
+
+Se agregó un nuevo router FastAPI con autenticación por API key (`X-N8N-Api-Key`), sin JWT de usuario. Expone 14 endpoints exclusivamente para uso interno de n8n:
+
+- `GET /n8n/resolver-tenant` — identifica el comercio por número WhatsApp destino
+- `GET /n8n/comercios/{id}/contexto` — contexto completo del turno (crea cliente y sesión si no existen)
+- `POST /n8n/comercios/{id}/mensajes` — persiste mensajes en el historial
+- `POST /n8n/comercios/{id}/clientes/buscar-o-crear`
+- `PATCH /n8n/clientes/{id}`
+- `GET /n8n/comercios/{id}/catalogo`
+- `POST /n8n/comercios/{id}/pedidos`
+- `POST /n8n/comercios/{id}/pedidos/{id}/items`
+- `DELETE /n8n/comercios/{id}/pedidos/{id}/items/{item_id}`
+- `GET /n8n/comercios/{id}/pedidos/{id}/resumen`
+- `POST /n8n/comercios/{id}/pedidos/{id}/confirmar`
+- `POST /n8n/comercios/{id}/pedidos/{id}/pago`
+- `POST /n8n/conversaciones/{id}/derivar`
+- `GET /n8n/sesiones/inactivas`
+
+### Flujo de confirmación y pago
+
+1. El `agente-pedido` gestiona el carrito y la confirmación (in_progress → pending_payment).
+2. El orquestador detecta el resultado `PEDIDO_CONFIRMADO` del agente y llama directamente la herramienta `procesar_pago`.
+3. `procesar_pago` (HTTP tool, sin LLM) registra el método y genera el link de MercadoPago si aplica.
+
+### Variables de entorno agregadas
+
+- `N8N_API_KEY`: clave interna de autenticación para los endpoints `/n8n/`

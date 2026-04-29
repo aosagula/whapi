@@ -128,7 +128,10 @@ function SesionRow({
   return (
     <tr className="hover:bg-amber-50 transition-colors">
       <td className="px-4 py-3">
-        <div className="font-medium text-brown">{sesion.customer.name ?? "Sin nombre"}</div>
+        <div className="font-medium text-brown">{sesion.customer.display_name ?? "Sin nombre"}</div>
+        {sesion.customer.ai_name && sesion.customer.ai_name !== sesion.customer.display_name && (
+          <div className="text-xs text-brown-muted">Perfil WA: {sesion.customer.ai_name}</div>
+        )}
       </td>
       <td className="px-4 py-3 text-brown-muted">{sesion.customer.phone}</td>
       <td className="px-4 py-3">

@@ -145,9 +145,12 @@ export default function ConversacionDetallePage() {
           </button>
           <div>
             <h1 className="font-serif text-2xl text-brown">
-              {sesion.customer.name ?? "Sin nombre"}
+              {sesion.customer.display_name ?? "Sin nombre"}
             </h1>
             <p className="text-brown-muted text-sm">{sesion.customer.phone}</p>
+            {sesion.customer.ai_name && sesion.customer.ai_name !== sesion.customer.display_name && (
+              <p className="text-brown-muted text-xs">Perfil WA: {sesion.customer.ai_name}</p>
+            )}
           </div>
         </div>
         {sesion.assigned_operator_name && (
@@ -284,8 +287,12 @@ export default function ConversacionDetallePage() {
             <h2 className="font-semibold text-brown text-sm uppercase tracking-wide mb-3">Datos del cliente</h2>
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-brown-muted">Nombre</span>
-                <span className="text-brown">{sesion.customer.name ?? "—"}</span>
+                <span className="text-brown-muted">Nombre visible</span>
+                <span className="text-brown">{sesion.customer.display_name ?? "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brown-muted">Nombre perfil WA</span>
+                <span className="text-brown">{sesion.customer.ai_name ?? "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-brown-muted">Teléfono</span>

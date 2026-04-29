@@ -30,11 +30,11 @@ ROLES_HITL = {"owner", "admin", "cashier"}
 class ClienteResumen(BaseModel):
     id: uuid.UUID
     name: str | None
+    display_name: str | None
+    ai_name: str | None
     phone: str
     address: str | None
     credit_balance: float
-
-    model_config = {"from_attributes": True}
 
 
 class ItemResumen(BaseModel):
@@ -97,6 +97,27 @@ class SesionDetalleResponse(BaseModel):
 
 class MensajeCreate(BaseModel):
     content: str
+
+
+def _customer_display_name(customer: Customer) -> str | None:
+    return (
+        customer.name
+        or customer.whatsapp_display_name
+        or customer.whatsapp_profile_name
+        or customer.whatsapp_business_name
+    )
+
+
+def _to_cliente_resumen(customer: Customer) -> ClienteResumen:
+    return ClienteResumen(
+        id=customer.id,
+        name=customer.name,
+        display_name=_customer_display_name(customer),
+        ai_name=customer.whatsapp_profile_name,
+        phone=customer.phone,
+        address=customer.address,
+        credit_balance=float(customer.credit_balance),
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -193,7 +214,7 @@ async def _cargar_sesion_list_item(
     return SesionListItem(
         id=session.id,
         status=session.status,
-        customer=ClienteResumen.model_validate(customer),
+        customer=_to_cliente_resumen(customer),
         assigned_operator_id=session.assigned_operator_id,
         assigned_operator_name=operator_name,
         pedido_en_curso=pedido,
@@ -287,7 +308,7 @@ async def obtener_conversacion(
     return SesionDetalleResponse(
         id=session.id,
         status=session.status,
-        customer=ClienteResumen.model_validate(customer),
+        customer=_to_cliente_resumen(customer),
         assigned_operator_id=session.assigned_operator_id,
         assigned_operator_name=operator_name,
         pedido_en_curso=pedido,
@@ -392,7 +413,7 @@ async def enviar_mensaje(
         numero = numero_result.scalar_one_or_none()
         if numero and numero.session_name:
             await enviar_mensaje_whatsapp(
-                customer.phone,
+                customer.whatsapp_wa_id or customer.phone,
                 data.content.strip(),
                 numero.session_name,
                 token=numero.wpp_token,

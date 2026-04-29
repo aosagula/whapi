@@ -124,8 +124,13 @@ export default function ClientesPage() {
                   onClick={() => router.push(`/${comercioId}/clientes/${c.id}`)}
                   className="hover:bg-amber-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 font-medium text-brown">
-                    {c.name ?? <span className="text-brown-muted italic font-normal">Sin nombre</span>}
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-brown">
+                      {c.display_name ?? <span className="text-brown-muted italic font-normal">Sin nombre</span>}
+                    </div>
+                    {c.ai_name && c.ai_name !== c.display_name && (
+                      <div className="text-xs text-brown-muted">Perfil WA: {c.ai_name}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-brown-muted">{c.phone}</td>
                   <td className="px-4 py-3 text-right">

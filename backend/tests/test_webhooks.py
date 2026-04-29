@@ -95,6 +95,10 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
         return_value=None,
+    ), patch(
+        "app.api.webhooks._resolver_pn_lid_wpp",
+        new_callable=AsyncMock,
+        return_value="549111222333",
     ):
         async with await _make_client() as client:
             comercio, token = await _setup_comercio(client, "wh_msg")
@@ -123,8 +127,15 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
                 json={
                     "event": "onmessage",
                     "to": f"{phone_clean}@c.us",
-                    "from": "549111222333@c.us",
+                    "from": "238465945968878@lid",
                     "body": "Quiero una muzza grande",
+                    "sender": {
+                        "id": "238465945968878@lid",
+                        "formattedName": "Luciana Coccari",
+                        "name": "Luciana Coccari",
+                        "pushname": "Telefono Backup Vaclog",
+                    },
+                    "notifyName": "Telefono Backup Vaclog",
                 },
             )
 
@@ -140,6 +151,7 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
         messages = list(result.scalars().all())
         assert len(messages) == 1
         assert messages[0].sender_phone == "549111222333"
+        assert messages[0].sender_name == "Luciana Coccari"
         assert messages[0].content == "Quiero una muzza grande"
         assert messages[0].raw_payload is not None
 
@@ -150,11 +162,16 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
     from app.core.db import AsyncSessionLocal
     from app.models.conversation import ConversationSession
     from app.models.customer import Customer
+    cliente_phone = "549111222333"
 
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
         return_value=None,
+    ), patch(
+        "app.api.webhooks._resolver_pn_lid_wpp",
+        new_callable=AsyncMock,
+        return_value=cliente_phone,
     ):
         async with await _make_client() as client:
             comercio, token = await _setup_comercio(client, "wh_known")
@@ -167,7 +184,6 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
             )
             assert r_wa.status_code == 201
 
-            cliente_phone = "549111222333"
             r_cliente = await client.post(
                 f"/comercios/{comercio['id']}/clientes",
                 json={"phone": cliente_phone, "name": "Juan Cliente"},
@@ -204,9 +220,10 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
             assert len(customers) == 1
             assert str(customers[0].id) == cliente_id
             assert customers[0].name == "Juan Cliente"
+            assert customers[0].phone == cliente_phone
             assert customers[0].whatsapp_wa_id == f"{cliente_phone}@s.whatsapp.net"
-            assert customers[0].whatsapp_display_name == "Juan Push"
-            assert customers[0].whatsapp_profile_name == "Juan Perfil"
+            assert customers[0].whatsapp_display_name == "Juan Perfil"
+            assert customers[0].whatsapp_profile_name == "Juan Push"
             assert customers[0].whatsapp_business_name == "Juan Negocio"
             assert customers[0].whatsapp_metadata is not None
 

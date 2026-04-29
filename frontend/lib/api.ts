@@ -622,9 +622,15 @@ export interface ClienteResponse {
   business_id: string
   phone: string
   name: string | null
+  display_name: string | null
+  ai_name: string | null
   address: string | null
   has_whatsapp: boolean
   credit_balance: number
+  whatsapp_wa_id: string | null
+  whatsapp_display_name: string | null
+  whatsapp_profile_name: string | null
+  whatsapp_business_name: string | null
   created_at: string
 }
 
@@ -684,6 +690,8 @@ export type SessionStatus = "active_bot" | "waiting_operator" | "assigned_human"
 export interface ClienteResumenConv {
   id: string
   name: string | null
+  display_name: string | null
+  ai_name: string | null
   phone: string
   address: string | null
   credit_balance: number

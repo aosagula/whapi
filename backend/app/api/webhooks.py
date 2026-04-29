@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +21,7 @@ from app.models.order import Order
 from app.models.whatsapp import WhatsappNumber
 from app.services.notificaciones import notificar_pago_confirmado
 from app.services.mercadopago import verificar_pago
+from app.services.whatsapp import _resolver_pn_lid_wpp
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +51,18 @@ def _extract_contact_metadata(payload: dict) -> tuple[str | None, str | None, st
         or data.get("from")
     )
     display_name = (
-        source.get("pushname")
-        or source.get("shortName")
-        or payload.get("notifyName")
-        or data.get("notifyName")
+        source.get("formattedName")
+        or source.get("name")
+        or chat.get("formattedTitle")
         or chat.get("name")
     )
-    profile_name = source.get("name") or data.get("senderName") or sender.get("name")
+    profile_name = (
+        source.get("pushname")
+        or payload.get("notifyName")
+        or data.get("notifyName")
+        or source.get("shortName")
+        or data.get("senderName")
+    )
     business_name = source.get("verifiedName") or chat.get("formattedTitle")
 
     metadata = {
@@ -149,24 +155,59 @@ async def webhook_wppconnect(
         wa_number.id,
     )
 
-    # Buscar o crear cliente por su número de teléfono
+    # Si el remitente llega como @lid, intentamos resolver el número real usando WPPConnect.
+    raw_sender_id = from_number.split("@")[0].strip()
+    resolved_phone = from_clean
+    resolved_wa_id: str | None = None
+    if "@lid" in from_number and wa_number.session_name:
+        try:
+            lid_resolution = await _resolver_pn_lid_wpp(
+                wa_number.session_name,
+                raw_sender_id,
+                token=wa_number.wpp_token,
+            )
+            if isinstance(lid_resolution, tuple):
+                lid_phone, lid_wa_id = lid_resolution
+            else:
+                lid_phone, lid_wa_id = lid_resolution, None
+            if lid_phone:
+                resolved_phone = lid_phone
+            if lid_wa_id:
+                resolved_wa_id = lid_wa_id
+        except HTTPException:
+            logger.warning("No se pudo resolver pn-lid %s; se usa el identificador recibido", raw_sender_id)
+
+    logger.info(
+        "Webhook WPPConnect teléfono resuelto from=%s resolved_phone=%s resolved_wa_id=%s",
+        from_clean,
+        resolved_phone,
+        resolved_wa_id or "<vacío>",
+    )
+
+    # Buscar o crear cliente por su número de teléfono o por su identificador WA
     wa_id, display_name, profile_name, business_name, contact_metadata = _extract_contact_metadata(payload)
+    effective_wa_id = resolved_wa_id or wa_id or from_number
     cust_result = await db.execute(
         select(Customer).where(
-            Customer.phone.contains(from_clean),
             Customer.business_id == business_id,
+            or_(
+                Customer.phone == resolved_phone,
+                Customer.phone == from_clean,
+                Customer.whatsapp_wa_id == effective_wa_id,
+                Customer.whatsapp_wa_id == from_number,
+            ),
         ).limit(1)
     )
     customer = cust_result.scalar_one_or_none()
 
     if customer is None:
         # Crear cliente anónimo para la sesión
-        logger.info("Webhook WPPConnect creando cliente nuevo phone=%s", from_clean)
+        logger.info("Webhook WPPConnect creando cliente nuevo phone=%s", resolved_phone)
         customer = Customer(
             business_id=business_id,
-            phone=from_clean,
+            phone=resolved_phone,
             has_whatsapp=True,
-            whatsapp_wa_id=wa_id,
+            whatsapp_wa_id=effective_wa_id,
             whatsapp_display_name=display_name,
             whatsapp_profile_name=profile_name,
             whatsapp_business_name=business_name,
@@ -176,7 +217,9 @@ async def webhook_wppconnect(
         await db.flush()
     else:
         logger.info("Webhook WPPConnect reutilizando cliente id=%s name=%s", customer.id, customer.name)
-        customer.whatsapp_wa_id = wa_id or customer.whatsapp_wa_id
+        if resolved_phone and customer.phone != resolved_phone:
+            customer.phone = resolved_phone
+        customer.whatsapp_wa_id = effective_wa_id or customer.whatsapp_wa_id
         customer.whatsapp_display_name = display_name or customer.whatsapp_display_name
         customer.whatsapp_profile_name = profile_name or customer.whatsapp_profile_name
         customer.whatsapp_business_name = business_name or customer.whatsapp_business_name
@@ -225,7 +268,7 @@ async def webhook_wppconnect(
                 or payload.get("messageId")
                 or payload.get("data", {}).get("id", "")
             ) or None,
-            sender_phone=from_clean,
+            sender_phone=resolved_phone,
             sender_name=display_name or profile_name,
             raw_payload=payload,
         )
@@ -237,7 +280,7 @@ async def webhook_wppconnect(
     await db.commit()
     logger.info(
         "Mensaje entrante de %s para comercio %s guardado en sesión %s",
-        from_clean, business_id, session.id,
+        resolved_phone, business_id, session.id,
     )
     return {"ok": True, "session_id": str(session.id)}
 

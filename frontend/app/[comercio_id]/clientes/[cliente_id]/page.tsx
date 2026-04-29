@@ -188,7 +188,7 @@ export default function DetalleClientePage() {
         </button>
         <div>
           <h1 className="font-serif text-3xl text-brown">
-            {cliente.name ?? <span className="italic text-brown-muted">Sin nombre</span>}
+            {cliente.display_name ?? <span className="italic text-brown-muted">Sin nombre</span>}
           </h1>
           <p className="text-brown-muted text-sm mt-0.5">{cliente.phone}</p>
         </div>
@@ -200,7 +200,7 @@ export default function DetalleClientePage() {
         <div className="space-y-4">
           {/* Nombre */}
           <CampoEditable
-            label="Nombre"
+            label="Nombre interno"
             valor={cliente.name ?? "—"}
             editando={editando === "name"}
             editValue={editValue}

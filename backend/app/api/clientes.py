@@ -38,12 +38,16 @@ class ClienteResponse(BaseModel):
     business_id: uuid.UUID
     phone: str
     name: str | None
+    display_name: str | None
+    ai_name: str | None
     address: str | None
     has_whatsapp: bool
     credit_balance: float
+    whatsapp_wa_id: str | None
+    whatsapp_display_name: str | None
+    whatsapp_profile_name: str | None
+    whatsapp_business_name: str | None
     created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class ClienteListResponse(BaseModel):
@@ -84,6 +88,34 @@ class PedidoResumenResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _display_name(customer: Customer) -> str | None:
+    return (
+        customer.name
+        or customer.whatsapp_display_name
+        or customer.whatsapp_profile_name
+        or customer.whatsapp_business_name
+    )
+
+
+def _to_cliente_response(customer: Customer) -> ClienteResponse:
+    return ClienteResponse(
+        id=customer.id,
+        business_id=customer.business_id,
+        phone=customer.phone,
+        name=customer.name,
+        display_name=_display_name(customer),
+        ai_name=customer.whatsapp_profile_name,
+        address=customer.address,
+        has_whatsapp=customer.has_whatsapp,
+        credit_balance=float(customer.credit_balance),
+        whatsapp_wa_id=customer.whatsapp_wa_id,
+        whatsapp_display_name=customer.whatsapp_display_name,
+        whatsapp_profile_name=customer.whatsapp_profile_name,
+        whatsapp_business_name=customer.whatsapp_business_name,
+        created_at=customer.created_at,
+    )
+
+
 async def _get_cliente_o_404(
     db: AsyncSession, business_id: uuid.UUID, cliente_id: uuid.UUID
 ) -> Customer:
@@ -123,6 +155,9 @@ async def listar_clientes(
         base_filter.append(
             or_(
                 Customer.name.ilike(term),
+                Customer.whatsapp_display_name.ilike(term),
+                Customer.whatsapp_profile_name.ilike(term),
+                Customer.whatsapp_business_name.ilike(term),
                 Customer.phone.ilike(term),
             )
         )
@@ -143,7 +178,7 @@ async def listar_clientes(
     items = list(items_result.scalars().all())
 
     return ClienteListResponse(
-        items=[ClienteResponse.model_validate(c) for c in items],
+        items=[_to_cliente_response(c) for c in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -171,7 +206,7 @@ async def buscar_cliente_por_telefono(
     customer = result.scalar_one_or_none()
     if customer is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
-    return ClienteResponse.model_validate(customer)
+    return _to_cliente_response(customer)
 
 
 @router.post(
@@ -208,7 +243,7 @@ async def crear_cliente(
     db.add(customer)
     await db.commit()
     await db.refresh(customer)
-    return ClienteResponse.model_validate(customer)
+    return _to_cliente_response(customer)
 
 
 @router.get(
@@ -224,7 +259,7 @@ async def obtener_cliente(
     """Obtiene un cliente por ID."""
     business, _ = ctx
     customer = await _get_cliente_o_404(db, business.id, cliente_id)
-    return ClienteResponse.model_validate(customer)
+    return _to_cliente_response(customer)
 
 
 @router.patch(
@@ -251,7 +286,7 @@ async def actualizar_cliente(
 
     await db.commit()
     await db.refresh(customer)
-    return ClienteResponse.model_validate(customer)
+    return _to_cliente_response(customer)
 
 
 @router.get(

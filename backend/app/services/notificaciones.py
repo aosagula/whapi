@@ -110,15 +110,16 @@ async def enviar_mensaje_whatsapp(
     if bearer:
         headers["Authorization"] = f"Bearer {bearer}"
 
-    # WPPConnect espera el número en formato internacional sin '+'
-    phone_normalized = phone.lstrip("+")
+    wa_target = phone.strip()
+    if "@" not in wa_target:
+        wa_target = f"{wa_target.lstrip('+')}@c.us"
     host = settings.WPPCONNECT_HOST.rstrip("/")
     if not (host.startswith("http://") or host.startswith("https://")):
         host = f"http://{host}:{settings.WPPCONNECT_PORT}"
     url = f"{host}/api/{session_name}/send-message"
     logger.info(
         "Enviando mensaje WhatsApp a %s usando sesión %s",
-        phone_normalized,
+        wa_target,
         session_name,
     )
 
@@ -126,12 +127,12 @@ async def enviar_mensaje_whatsapp(
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 url,
-                json={"phone": f"{phone_normalized}@c.us", "message": message},
+                json={"phone": wa_target, "message": message},
                 headers=headers,
             )
         logger.info(
             "Mensaje WhatsApp enviado a %s con status %s",
-            phone,
+            wa_target,
             resp.status_code,
         )
     except Exception as exc:  # noqa: BLE001

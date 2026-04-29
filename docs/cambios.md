@@ -9,4 +9,5 @@
 [ ] 2.c Mostrar el estado de la conversacion en la lista de conversaciones
 [ ] 2.d Mostrar el nombre del cliente en la lista de conversaciones
 [ ] 2.e Mostrar el numero de telefono en la lista de conversaciones
+[x] 2.f Resolver correctamente nombre y telefono del remitente cuando WPPConnect entregue identificadores @lid. Si el contacto esta agendado en el telefono vinculado usar ese nombre para mostrar en Clientes y Conversaciones; si no, usar el nombre del perfil del mensaje. Conservar tambien el nombre del perfil para el agente de AI y guardar el payload completo recibido.
 [ ] 3. Asegurar que cuando un telefono se da de baja previamente se cierra la session con el wppconnect. Un telefono activo solo puede tener una sesion abierta en wppconnect, el resto se deben cerrar. Utilizar la api de wppconnect para cerrar las sesiones.

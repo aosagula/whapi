@@ -216,6 +216,55 @@ async def _cerrar_sesion_wpp(session_name: str, token: str | None = None) -> Non
     logger.info("Sesión WPPConnect %s cerrada", session_name)
 
 
+async def _resolver_pn_lid_wpp(
+    session_name: str,
+    pn_lid: str,
+    token: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Resuelve un identificador LID a destino WhatsApp y teléfono usando WPPConnect."""
+    lid = pn_lid.replace("@lid", "").strip()
+    if not lid:
+        return None, None
+
+    logger.info("Resolviendo pn-lid %s en sesión %s", lid, session_name)
+    data = await _wpp_request("GET", f"/api/{session_name}/contact/pn-lid/{lid}", token=token)
+    logger.info("Respuesta cruda pn-lid %s en sesión %s: %s", lid, session_name, data)
+
+    def _pick_contact(value: object) -> tuple[str | None, str | None]:
+        if isinstance(value, str):
+            return value, value if "@" in value else None
+        if isinstance(value, dict):
+            serialized = value.get("_serialized") or value.get("serialized")
+            if isinstance(serialized, str) and serialized:
+                return serialized, serialized
+
+            for key in ("wid", "user", "id"):
+                item = value.get(key)
+                if isinstance(item, str) and item:
+                    return item, item if "@" in item else None
+        return None, None
+
+    raw_phone, wa_target = _pick_contact(data)
+    if not raw_phone and isinstance(data, dict):
+        raw_phone, wa_target = _pick_contact(data.get("phoneNumber"))
+    if not raw_phone and isinstance(data, dict):
+        raw_phone, wa_target = _pick_contact(data.get("response"))
+    if not raw_phone and isinstance(data, dict):
+        raw_phone, wa_target = _pick_contact(data.get("data"))
+    if not raw_phone:
+        logger.info("pn-lid %s sin número resuelto", lid)
+        return None, None
+
+    resolved = re.sub(r"\D", "", raw_phone.split("@")[0])
+    logger.info(
+        "pn-lid %s resuelto a teléfono=%s wa_target=%s",
+        lid,
+        resolved or "<vacío>",
+        wa_target or "<vacío>",
+    )
+    return resolved or None, wa_target
+
+
 # ── CRUD WhatsappNumber ───────────────────────────────────────────────────────
 
 async def listar_numeros(

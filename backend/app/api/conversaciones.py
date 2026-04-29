@@ -1,6 +1,7 @@
 """Endpoints de conversaciones activas (HITL — Fase 8)."""
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -33,6 +34,9 @@ class ClienteResumen(BaseModel):
     display_name: str | None
     ai_name: str | None
     phone: str
+    phone_display: str | None
+    whatsapp_lid: str | None
+    whatsapp_wa_id: str | None
     address: str | None
     credit_balance: float
 
@@ -108,6 +112,31 @@ def _customer_display_name(customer: Customer) -> str | None:
     )
 
 
+def _customer_whatsapp_lid(customer: Customer) -> str | None:
+    metadata = customer.whatsapp_metadata if isinstance(customer.whatsapp_metadata, dict) else {}
+    sender = metadata.get("sender") if isinstance(metadata.get("sender"), dict) else {}
+    sender_id = sender.get("id")
+    if isinstance(sender_id, str) and sender_id.endswith("@lid"):
+        return sender_id
+    return None
+
+
+def _customer_phone_display(customer: Customer) -> str | None:
+    phone = (customer.phone or "").strip()
+    if not phone:
+        return None
+
+    whatsapp_lid = _customer_whatsapp_lid(customer)
+    if not whatsapp_lid:
+        return phone
+
+    lid_digits = re.sub(r"\D", "", whatsapp_lid.split("@", 1)[0])
+    phone_digits = re.sub(r"\D", "", phone)
+    if lid_digits and lid_digits == phone_digits:
+        return None
+    return phone
+
+
 def _to_cliente_resumen(customer: Customer) -> ClienteResumen:
     return ClienteResumen(
         id=customer.id,
@@ -115,6 +144,9 @@ def _to_cliente_resumen(customer: Customer) -> ClienteResumen:
         display_name=_customer_display_name(customer),
         ai_name=customer.whatsapp_profile_name,
         phone=customer.phone,
+        phone_display=_customer_phone_display(customer),
+        whatsapp_lid=_customer_whatsapp_lid(customer),
+        whatsapp_wa_id=customer.whatsapp_wa_id,
         address=customer.address,
         credit_balance=float(customer.credit_balance),
     )

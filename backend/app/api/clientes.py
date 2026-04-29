@@ -1,6 +1,7 @@
 """Endpoints de clientes: ABM, historial de pedidos y gestión de créditos."""
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 
@@ -37,12 +38,14 @@ class ClienteResponse(BaseModel):
     id: uuid.UUID
     business_id: uuid.UUID
     phone: str
+    phone_display: str | None
     name: str | None
     display_name: str | None
     ai_name: str | None
     address: str | None
     has_whatsapp: bool
     credit_balance: float
+    whatsapp_lid: str | None
     whatsapp_wa_id: str | None
     whatsapp_display_name: str | None
     whatsapp_profile_name: str | None
@@ -97,17 +100,44 @@ def _display_name(customer: Customer) -> str | None:
     )
 
 
+def _whatsapp_lid(customer: Customer) -> str | None:
+    metadata = customer.whatsapp_metadata if isinstance(customer.whatsapp_metadata, dict) else {}
+    sender = metadata.get("sender") if isinstance(metadata.get("sender"), dict) else {}
+    sender_id = sender.get("id")
+    if isinstance(sender_id, str) and sender_id.endswith("@lid"):
+        return sender_id
+    return None
+
+
+def _phone_display(customer: Customer) -> str | None:
+    phone = (customer.phone or "").strip()
+    if not phone:
+        return None
+
+    whatsapp_lid = _whatsapp_lid(customer)
+    if not whatsapp_lid:
+        return phone
+
+    lid_digits = re.sub(r"\D", "", whatsapp_lid.split("@", 1)[0])
+    phone_digits = re.sub(r"\D", "", phone)
+    if lid_digits and lid_digits == phone_digits:
+        return None
+    return phone
+
+
 def _to_cliente_response(customer: Customer) -> ClienteResponse:
     return ClienteResponse(
         id=customer.id,
         business_id=customer.business_id,
         phone=customer.phone,
+        phone_display=_phone_display(customer),
         name=customer.name,
         display_name=_display_name(customer),
         ai_name=customer.whatsapp_profile_name,
         address=customer.address,
         has_whatsapp=customer.has_whatsapp,
         credit_balance=float(customer.credit_balance),
+        whatsapp_lid=_whatsapp_lid(customer),
         whatsapp_wa_id=customer.whatsapp_wa_id,
         whatsapp_display_name=customer.whatsapp_display_name,
         whatsapp_profile_name=customer.whatsapp_profile_name,

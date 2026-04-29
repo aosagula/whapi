@@ -42,7 +42,13 @@ export default function ConversacionesPage() {
     setError(null)
     try {
       const data = await api.conversaciones.listar(comercioId)
-      setSesiones(data)
+      setSesiones(
+        [...data].sort((a, b) => {
+          const aTime = new Date(a.last_message_at ?? a.created_at).getTime()
+          const bTime = new Date(b.last_message_at ?? b.created_at).getTime()
+          return bTime - aTime
+        }),
+      )
     } catch {
       setError("No se pudo cargar las conversaciones.")
     } finally {
@@ -94,6 +100,7 @@ export default function ConversacionesPage() {
               <tr>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Cliente</th>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Teléfono</th>
+                <th className="text-left px-4 py-3 text-brown-muted font-medium">LID WhatsApp</th>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Estado</th>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Último mensaje</th>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Operador</th>
@@ -133,7 +140,8 @@ function SesionRow({
           <div className="text-xs text-brown-muted">Perfil WA: {sesion.customer.ai_name}</div>
         )}
       </td>
-      <td className="px-4 py-3 text-brown-muted">{sesion.customer.phone}</td>
+      <td className="px-4 py-3 text-brown-muted">{sesion.customer.phone_display ?? "—"}</td>
+      <td className="px-4 py-3 text-brown-muted">{sesion.customer.whatsapp_lid ?? "—"}</td>
       <td className="px-4 py-3">
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
           {status.label}

@@ -621,12 +621,14 @@ export interface ClienteResponse {
   id: string
   business_id: string
   phone: string
+  phone_display: string | null
   name: string | null
   display_name: string | null
   ai_name: string | null
   address: string | null
   has_whatsapp: boolean
   credit_balance: number
+  whatsapp_lid: string | null
   whatsapp_wa_id: string | null
   whatsapp_display_name: string | null
   whatsapp_profile_name: string | null
@@ -693,6 +695,9 @@ export interface ClienteResumenConv {
   display_name: string | null
   ai_name: string | null
   phone: string
+  phone_display: string | null
+  whatsapp_lid: string | null
+  whatsapp_wa_id: string | null
   address: string | null
   credit_balance: number
 }

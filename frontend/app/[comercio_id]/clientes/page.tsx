@@ -113,6 +113,7 @@ export default function ClientesPage() {
               <tr>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Cliente</th>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Teléfono</th>
+                <th className="text-left px-4 py-3 text-brown-muted font-medium">LID WhatsApp</th>
                 <th className="text-right px-4 py-3 text-brown-muted font-medium">Crédito</th>
                 <th className="text-left px-4 py-3 text-brown-muted font-medium">Alta</th>
               </tr>
@@ -132,7 +133,8 @@ export default function ClientesPage() {
                       <div className="text-xs text-brown-muted">Perfil WA: {c.ai_name}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-brown-muted">{c.phone}</td>
+                  <td className="px-4 py-3 text-brown-muted">{c.phone_display ?? "—"}</td>
+                  <td className="px-4 py-3 text-brown-muted">{c.whatsapp_lid ?? "—"}</td>
                   <td className="px-4 py-3 text-right">
                     {c.credit_balance > 0 ? (
                       <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">

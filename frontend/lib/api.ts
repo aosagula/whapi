@@ -467,6 +467,11 @@ export const api = {
         method: "POST",
       }),
 
+    desconectar: (comercioId: string, numeroId: string) =>
+      request<WhatsappNumberResponse>(`/comercios/${comercioId}/whatsapp/${numeroId}/desconectar`, {
+        method: "POST",
+      }),
+
     editar: (comercioId: string, numeroId: string, data: { label?: string; is_active?: boolean }) =>
       request<WhatsappNumberResponse>(`/comercios/${comercioId}/whatsapp/${numeroId}`, {
         method: "PATCH",

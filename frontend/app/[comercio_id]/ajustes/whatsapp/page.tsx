@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
-import { Smartphone, Plus, RefreshCw, Pencil, Trash2, X, Check, RotateCcw } from "lucide-react"
+import { Smartphone, Plus, RefreshCw, Pencil, Trash2, X, Check, RotateCcw, Power } from "lucide-react"
 import { api, type WhatsappNumberResponse, type WhatsappStatus } from "@/lib/api"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,6 +57,20 @@ function ModalQR({ comercioId, numero, onClose, onConnected }: ModalQRProps) {
     }
   }, [comercioId, numero.id, onConnected])
 
+  async function handleRescan() {
+    setLoading(true)
+    setError(null)
+    try {
+      const resp = await api.whatsapp.reconectar(comercioId, numero.id)
+      setQr(resp.qr_code)
+      setStatus(resp.status)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error al generar un nuevo QR")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Polling cada 5 segundos mientras está en scanning
   useEffect(() => {
     fetchQR()
@@ -89,7 +103,14 @@ function ModalQR({ comercioId, numero, onClose, onConnected }: ModalQRProps) {
                 <Check className="w-7 h-7 text-green-600" />
               </div>
               <p className="text-green-700 font-medium">¡Número conectado!</p>
-              <button onClick={onClose} className="btn-primary mt-2">Cerrar</button>
+              <div className="flex gap-2 mt-2">
+                <button onClick={handleRescan} className="btn-outline">
+                  Re-escanear QR
+                </button>
+                <button onClick={onClose} className="btn-primary">
+                  Cerrar
+                </button>
+              </div>
             </div>
           ) : loading && !qr ? (
             <div className="flex items-center justify-center py-12 text-gray-400">
@@ -108,6 +129,9 @@ function ModalQR({ comercioId, numero, onClose, onConnected }: ModalQRProps) {
                 className="w-56 h-56 rounded-xl border border-border"
               />
               <p className="text-xs text-gray-400">Actualizando automáticamente…</p>
+              <button onClick={handleRescan} className="btn-outline text-sm">
+                Generar QR nuevo
+              </button>
             </div>
           ) : (
             <div className="text-center text-sm text-gray-400 py-8">
@@ -287,6 +311,15 @@ export default function WhatsappPage() {
     setQrNumero({ ...numero, status: "scanning" })
   }
 
+  async function handleDesconectar(numero: WhatsappNumberResponse) {
+    if (!confirm("¿Desconectar este teléfono? Podrás volver a vincularlo después con un nuevo QR.")) return
+    const updated = await api.whatsapp.desconectar(comercioId, numero.id)
+    setNumeros((prev) => prev.map((n) => (n.id === numero.id ? updated : n)))
+    if (qrNumero?.id === numero.id) {
+      setQrNumero(null)
+    }
+  }
+
   const desconectados = numeros.filter((n) => n.is_active && n.status === "disconnected")
 
   return (
@@ -425,7 +458,7 @@ export default function WhatsappPage() {
                   <td className="px-4 py-3">
                     {numero.is_active && (
                       <div className="flex items-center justify-end gap-1">
-                        {/* Ver QR (si está en scanning) o reconectar (si está desconectado) */}
+                        {/* Ver QR si está esperando escaneo */}
                         {numero.status === "scanning" && (
                           <button
                             onClick={() => setQrNumero(numero)}
@@ -435,13 +468,24 @@ export default function WhatsappPage() {
                             <Smartphone className="w-4 h-4" />
                           </button>
                         )}
-                        {numero.status === "disconnected" && (
+                        {/* Re-escanear / reconectar para volver a vincular el número */}
+                        {numero.status !== "scanning" && (
                           <button
                             onClick={() => handleReconectar(numero)}
                             className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors"
-                            title="Reconectar"
+                            title={numero.status === "connected" ? "Re-escanear QR" : "Reconectar"}
                           >
                             <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {numero.status !== "disconnected" && (
+                          <button
+                            onClick={() => handleDesconectar(numero)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+                            title="Desconectar"
+                          >
+                            <Power className="w-4 h-4" />
                           </button>
                         )}
 

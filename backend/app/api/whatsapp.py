@@ -17,6 +17,7 @@ from app.schemas.whatsapp import (
 )
 from app.services.whatsapp import (
     agregar_numero,
+    desconectar_numero,
     editar_numero,
     eliminar_numero,
     listar_numeros,
@@ -97,6 +98,18 @@ async def reconectar(
         qr_code=qr_code,
         status=numero.status,
     )
+
+
+@router.post("/{numero_id}/desconectar", response_model=WhatsappNumberResponse)
+async def desconectar(
+    numero_id: uuid.UUID,
+    ctx: tuple[Business, UserBusiness] = Depends(get_membresia_gestion),
+    db: AsyncSession = Depends(get_db),
+) -> WhatsappNumberResponse:
+    """Desconecta la sesión WPPConnect sin eliminar el número. Requiere owner o admin."""
+    business, _ = ctx
+    numero = await desconectar_numero(business.id, numero_id, db)
+    return _to_response(numero)
 
 
 @router.patch("/{numero_id}", response_model=WhatsappNumberResponse)

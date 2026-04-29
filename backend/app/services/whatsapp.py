@@ -253,8 +253,8 @@ async def reconectar_numero(
     db: AsyncSession,
 ) -> tuple[WhatsappNumber, str | None]:
     """
-    Reconecta un número desconectado: reinicia la sesión WPPConnect
-    y devuelve el nuevo QR para escanear.
+    Fuerza una nueva vinculación del número: reinicia la sesión WPPConnect
+    y devuelve un QR nuevo para escanear.
     """
     numero = await _get_numero_o_404(business_id, numero_id, db)
     qr = None
@@ -262,6 +262,13 @@ async def reconectar_numero(
     numero.status = "scanning"  # type: ignore[assignment]
 
     if settings.WPPCONNECT_HOST and numero.session_name:
+        # Si la sesión actual sigue viva, intentamos cerrarla para forzar
+        # que WPPConnect emita un QR nuevo de vinculación.
+        try:
+            await _cerrar_sesion_wpp(numero.session_name, token=numero.wpp_token)
+        except HTTPException:
+            pass
+
         token = await _iniciar_sesion_wpp(numero.session_name)
         if token:
             numero.wpp_token = token
@@ -270,6 +277,29 @@ async def reconectar_numero(
     await db.commit()
     await db.refresh(numero)
     return numero, qr
+
+
+async def desconectar_numero(
+    business_id: uuid.UUID,
+    numero_id: uuid.UUID,
+    db: AsyncSession,
+) -> WhatsappNumber:
+    """
+    Desconecta la sesión WPPConnect del número, pero conserva el registro
+    para poder volver a vincularlo más adelante.
+    """
+    numero = await _get_numero_o_404(business_id, numero_id, db)
+
+    if settings.WPPCONNECT_HOST and numero.session_name:
+        try:
+            await _cerrar_sesion_wpp(numero.session_name, token=numero.wpp_token)
+        except HTTPException:
+            pass
+
+    numero.status = "disconnected"  # type: ignore[assignment]
+    await db.commit()
+    await db.refresh(numero)
+    return numero
 
 
 async def editar_numero(

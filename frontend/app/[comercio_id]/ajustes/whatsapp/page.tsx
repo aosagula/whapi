@@ -8,7 +8,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { Smartphone, Plus, RefreshCw, Pencil, Trash2, X, Check, RotateCcw, Power } from "lucide-react"
-import { api, type WhatsappNumberResponse, type WhatsappStatus } from "@/lib/api"
+import { api, type WhatsappNumberResponse, type WhatsappQRResponse, type WhatsappStatus } from "@/lib/api"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,18 +27,78 @@ function StatusBadge({ status }: { status: WhatsappStatus }) {
   )
 }
 
+interface ConfirmModalProps {
+  title: string
+  message: string
+  confirmLabel: string
+  tone?: "danger" | "neutral"
+  loading?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  tone = "neutral",
+  loading = false,
+  onCancel,
+  onConfirm,
+}: ConfirmModalProps) {
+  const confirmClass =
+    tone === "danger"
+      ? "bg-red-600 text-white hover:bg-red-700"
+      : "bg-brand text-white hover:bg-[#c94e03]"
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-brown/30 backdrop-blur-[1px] z-40" onClick={onCancel} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="card w-full max-w-md p-6 shadow-xl">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="font-serif text-2xl text-brown">{title}</h2>
+              <p className="text-sm text-brown-muted mt-2">{message}</p>
+            </div>
+            <button onClick={onCancel} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400" disabled={loading}>
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={onCancel} className="btn-outline px-4 py-2 text-sm rounded-xl" disabled={loading}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={loading}
+              className={`px-4 py-2 text-sm rounded-xl font-semibold transition-colors disabled:opacity-50 ${confirmClass}`}
+            >
+              {loading ? "Procesando..." : confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Modal QR ─────────────────────────────────────────────────────────────────
 
 interface ModalQRProps {
   comercioId: string
   numero: WhatsappNumberResponse
+  initialQr?: string | null
+  initialStatus?: WhatsappStatus
   onClose: () => void
   onConnected: () => void
 }
 
-function ModalQR({ comercioId, numero, onClose, onConnected }: ModalQRProps) {
-  const [qr, setQr] = useState<string | null>(null)
-  const [status, setStatus] = useState<WhatsappStatus>(numero.status)
+function ModalQR({ comercioId, numero, initialQr = null, initialStatus, onClose, onConnected }: ModalQRProps) {
+  const [qr, setQr] = useState<string | null>(initialQr)
+  const [status, setStatus] = useState<WhatsappStatus>(initialStatus ?? numero.status)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,7 +107,11 @@ function ModalQR({ comercioId, numero, onClose, onConnected }: ModalQRProps) {
     setError(null)
     try {
       const resp = await api.whatsapp.obtenerQR(comercioId, numero.id)
-      setQr(resp.qr_code)
+      setQr((prev) => {
+        if (resp.qr_code) return resp.qr_code
+        if (resp.status === "connected") return null
+        return prev
+      })
       setStatus(resp.status)
       if (resp.status === "connected") onConnected()
     } catch (e: unknown) {
@@ -62,7 +126,7 @@ function ModalQR({ comercioId, numero, onClose, onConnected }: ModalQRProps) {
     setError(null)
     try {
       const resp = await api.whatsapp.reconectar(comercioId, numero.id)
-      setQr(resp.qr_code)
+      setQr((prev) => resp.qr_code ?? prev)
       setStatus(resp.status)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al generar un nuevo QR")
@@ -258,12 +322,15 @@ export default function WhatsappPage() {
   // Modal agregar
   const [showAgregar, setShowAgregar] = useState(false)
   // Modal QR: numero seleccionado para ver QR
-  const [qrNumero, setQrNumero] = useState<WhatsappNumberResponse | null>(null)
+  const [qrNumero, setQrNumero] = useState<{ numero: WhatsappNumberResponse; initialQr?: string | null; initialStatus?: WhatsappStatus } | null>(null)
   // Edición inline de etiqueta
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState("")
   // Eliminación en curso
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<WhatsappNumberResponse | null>(null)
+  const [confirmDisconnect, setConfirmDisconnect] = useState<WhatsappNumberResponse | null>(null)
 
   const fetchNumeros = useCallback(
     async (showRefresh = false) => {
@@ -295,28 +362,37 @@ export default function WhatsappPage() {
   }
 
   async function handleEliminar(id: string) {
-    if (!confirm("¿Eliminar este número? Las conversaciones históricas se conservan.")) return
     setEliminandoId(id)
     try {
       await api.whatsapp.eliminar(comercioId, id)
       setNumeros((prev) => prev.map((n) => (n.id === id ? { ...n, is_active: false, status: "disconnected" } : n)))
     } finally {
       setEliminandoId(null)
+      setConfirmDelete(null)
     }
   }
 
   async function handleReconectar(numero: WhatsappNumberResponse) {
-    await api.whatsapp.reconectar(comercioId, numero.id)
-    setNumeros((prev) => prev.map((n) => (n.id === numero.id ? { ...n, status: "scanning" } : n)))
-    setQrNumero({ ...numero, status: "scanning" })
+    const resp = await api.whatsapp.reconectar(comercioId, numero.id)
+    setNumeros((prev) => prev.map((n) => (n.id === numero.id ? { ...n, status: resp.status } : n)))
+    setQrNumero({
+      numero: { ...numero, status: resp.status },
+      initialQr: resp.qr_code,
+      initialStatus: resp.status,
+    })
   }
 
   async function handleDesconectar(numero: WhatsappNumberResponse) {
-    if (!confirm("¿Desconectar este teléfono? Podrás volver a vincularlo después con un nuevo QR.")) return
-    const updated = await api.whatsapp.desconectar(comercioId, numero.id)
-    setNumeros((prev) => prev.map((n) => (n.id === numero.id ? updated : n)))
-    if (qrNumero?.id === numero.id) {
-      setQrNumero(null)
+    setDisconnectingId(numero.id)
+    try {
+      const updated = await api.whatsapp.desconectar(comercioId, numero.id)
+      setNumeros((prev) => prev.map((n) => (n.id === numero.id ? updated : n)))
+      if (qrNumero?.numero.id === numero.id) {
+        setQrNumero(null)
+      }
+    } finally {
+      setDisconnectingId(null)
+      setConfirmDisconnect(null)
     }
   }
 
@@ -461,7 +537,7 @@ export default function WhatsappPage() {
                         {/* Ver QR si está esperando escaneo */}
                         {numero.status === "scanning" && (
                           <button
-                            onClick={() => setQrNumero(numero)}
+                            onClick={() => setQrNumero({ numero })}
                             className="p-1.5 rounded-lg hover:bg-brand-pale text-brand transition-colors"
                             title="Ver QR"
                           >
@@ -481,7 +557,7 @@ export default function WhatsappPage() {
 
                         {numero.status !== "disconnected" && (
                           <button
-                            onClick={() => handleDesconectar(numero)}
+                            onClick={() => setConfirmDisconnect(numero)}
                             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
                             title="Desconectar"
                           >
@@ -503,7 +579,7 @@ export default function WhatsappPage() {
 
                         {/* Eliminar */}
                         <button
-                          onClick={() => handleEliminar(numero.id)}
+                          onClick={() => setConfirmDelete(numero)}
                           disabled={eliminandoId === numero.id}
                           className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors disabled:opacity-40"
                           title="Eliminar"
@@ -526,10 +602,40 @@ export default function WhatsappPage() {
           comercioId={comercioId}
           onClose={() => setShowAgregar(false)}
           onAdded={(numero) => {
-            setNumeros((prev) => [...prev, numero])
+            setNumeros((prev) => {
+              const exists = prev.some((item) => item.id === numero.id)
+              return exists ? prev.map((item) => (item.id === numero.id ? numero : item)) : [...prev, numero]
+            })
             setShowAgregar(false)
-            setQrNumero(numero)
+            setQrNumero({ numero })
           }}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Eliminar número"
+          message="Las conversaciones históricas se conservan, pero este número dejará de estar disponible en el comercio."
+          confirmLabel="Eliminar"
+          tone="danger"
+          loading={eliminandoId === confirmDelete.id}
+          onCancel={() => {
+            if (!eliminandoId) setConfirmDelete(null)
+          }}
+          onConfirm={() => handleEliminar(confirmDelete.id)}
+        />
+      )}
+
+      {confirmDisconnect && (
+        <ConfirmModal
+          title="Desconectar teléfono"
+          message="La sesión actual de WhatsApp se cerrará, pero el número seguirá registrado para poder vincularlo otra vez con un QR nuevo."
+          confirmLabel="Desconectar"
+          loading={disconnectingId === confirmDisconnect.id}
+          onCancel={() => {
+            if (!disconnectingId) setConfirmDisconnect(null)
+          }}
+          onConfirm={() => handleDesconectar(confirmDisconnect)}
         />
       )}
 
@@ -537,7 +643,9 @@ export default function WhatsappPage() {
       {qrNumero && (
         <ModalQR
           comercioId={comercioId}
-          numero={qrNumero}
+          numero={qrNumero.numero}
+          initialQr={qrNumero.initialQr}
+          initialStatus={qrNumero.initialStatus}
           onClose={() => setQrNumero(null)}
           onConnected={() => {
             fetchNumeros(true)

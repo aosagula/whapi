@@ -2,7 +2,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8001:8000"
+      - "8000:8000"
     env_file: .env
     environment:
       # Dentro del contenedor, localhost no llega al host; se usa host.docker.internal
@@ -19,7 +19,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3001:3000"
+      - "3000:3000"
     env_file: .env
     volumes:
       - ./frontend:/app

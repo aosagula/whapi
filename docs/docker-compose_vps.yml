@@ -1,0 +1,225 @@
+version: '3.8'
+
+# Red compartida para que el Proxy Inverso pueda ver a todos los contenedores
+networks:
+  vps_shared_network:
+    name: vps_shared_network
+    driver: bridge
+
+services:
+
+  # ==========================================
+  # NGINX PROXY MANAGER (El "Acomodador")
+  # ==========================================
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: proxy_manager
+    restart: unless-stopped
+    ports:
+      # Estos son los ÚNICOS puertos expuestos a Internet
+      - '80:80' # Tráfico HTTP normal
+      - '443:443' # Tráfico HTTPS seguro (SSL)
+      - '81:81' # Panel de administración Web de NPM
+    environment:
+      # Habilitar SQLite por defecto (no requiere base de datos extra)
+      DB_SQLITE_FILE: "/data/database.sqlite"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - vps_shared_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:81/api/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================
+  # SERVICIOS BASE (Bases de datos y colas)
+  # ==========================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres_vector
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-n8n}
+    # Solo expuesto en localhost del VPS (para SSH tunnel). No accesible desde internet.
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - vps_shared_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-n8n}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # PMM (Monitoreo profesional self-hosted)
+  # ==========================================
+  pmm-server:
+    image: percona/pmm-server:3
+    container_name: pmm_server
+    restart: unless-stopped
+    environment:
+      PMM_ENABLE_UPDATES: ${PMM_ENABLE_UPDATES:-false}
+      PMM_ENABLE_TELEMETRY: ${PMM_ENABLE_TELEMETRY:-false}
+      PMM_DATA_RETENTION: ${PMM_DATA_RETENTION:-30d}
+    networks:
+      - vps_shared_network
+    volumes:
+      - pmm_data:/srv
+
+  pmm-client:
+    image: percona/pmm-client:3
+    container_name: pmm_client
+    restart: unless-stopped
+    environment:
+      PMM_AGENT_SERVER_ADDRESS: pmm-server:8443
+      PMM_AGENT_SERVER_USERNAME: ${PMM_AGENT_SERVER_USERNAME:-admin}
+      PMM_AGENT_SERVER_PASSWORD: ${PMM_AGENT_SERVER_PASSWORD:-admin}
+      PMM_AGENT_SERVER_INSECURE_TLS: 1
+      PMM_AGENT_SETUP: 1
+      PMM_AGENT_SETUP_FORCE: 1
+      PMM_AGENT_SETUP_NODE_NAME: ${PMM_AGENT_SETUP_NODE_NAME:-vps-dasdach}
+      PMM_AGENT_SETUP_NODE_TYPE: container
+      PMM_AGENT_CONFIG_FILE: config/pmm-agent.yaml
+      PMM_AGENT_PRERUN_SCRIPT: /opt/percona/pmm-prerun.sh
+    networks:
+      - vps_shared_network
+    volumes:
+      - pmm_client_data:/usr/local/percona/pmm2/config
+      - ./pmm-prerun.sh:/opt/percona/pmm-prerun.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pmm-server:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_queue
+    restart: unless-stopped
+    # Tampoco exponemos Redis al exterior. Solo accesible internamente.
+    networks:
+      - vps_shared_network
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # N8N (Automatización)
+  # ==========================================
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n_main
+    restart: unless-stopped
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n}
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+
+      - WEBHOOK_URL=${WEBHOOK_URL:-https://n8n.agentic4biz.com}
+      - GENERIC_TIMEZONE=${TIMEZONE:-UTC}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    # NPM se encargará de enrutar el tráfico al puerto 5678 interno
+    networks:
+      - vps_shared_network
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  n8n-worker:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n_worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n}
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+
+      - GENERIC_TIMEZONE=${TIMEZONE:-UTC}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    networks:
+      - vps_shared_network
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==========================================
+  # DOZZLE (Monitor de estado y logs)
+  # ==========================================
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle_monitor
+    restart: unless-stopped
+    # NPM se encargará de enrutar el tráfico al puerto 8080 interno
+    networks:
+      - vps_shared_network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_LEVEL=info
+
+volumes:
+  npm_data:
+  npm_letsencrypt:
+  postgres_data:
+  pmm_data:
+  pmm_client_data:
+  redis_data:
+  n8n_data:

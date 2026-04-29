@@ -10,6 +10,11 @@ Antes de escribir cualquier código, presentá el plan de implementación del pa
 
 La especificación funcional completa está en `docs/especificacion-chatbot-pizzeria.md`. Ante cualquier duda de comportamiento o regla de negocio, consultarla primero. El archivo `docs/CLAUDE.md` contiene UX, navegación y el orden de fases de implementación.
 
+
+## Response format
+- Sin preamble, sin resumen al final
+- Respuestas cortas cuando el contexto es claro
+- Un solo bloque de código por cambio
 ## Comandos de desarrollo
 
 ### Backend (FastAPI)

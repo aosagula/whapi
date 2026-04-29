@@ -36,6 +36,38 @@ def _normalize_phone(value: str) -> str:
     return value.replace("@c.us", "").replace("@s.whatsapp.net", "").split("@")[0].lstrip("+").strip()
 
 
+def _extract_contact_metadata(payload: dict) -> tuple[str | None, str | None, str | None, str | None, dict]:
+    """Extrae metadatos de identidad del contacto desde el payload de WPPConnect."""
+    data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
+    sender = payload.get("sender", {}) if isinstance(payload.get("sender"), dict) else {}
+    chat = payload.get("chat", {}) if isinstance(payload.get("chat"), dict) else {}
+    contact = data.get("sender") if isinstance(data.get("sender"), dict) else {}
+    source = sender or contact
+
+    wa_id = (
+        source.get("id")
+        or payload.get("from")
+        or data.get("from")
+    )
+    display_name = (
+        source.get("pushname")
+        or source.get("shortName")
+        or payload.get("notifyName")
+        or data.get("notifyName")
+        or chat.get("name")
+    )
+    profile_name = source.get("name") or data.get("senderName") or sender.get("name")
+    business_name = source.get("verifiedName") or chat.get("formattedTitle")
+
+    metadata = {
+        "sender": source or None,
+        "chat": chat or None,
+        "notify_name": payload.get("notifyName") or data.get("notifyName"),
+        "quoted_msg": data.get("quotedMsg") if isinstance(data.get("quotedMsg"), dict) else None,
+    }
+    return wa_id, display_name, profile_name, business_name, metadata
+
+
 # ── Webhook WPPConnect ────────────────────────────────────────────────────────
 
 @router.post("/wppconnect", status_code=status.HTTP_200_OK)
@@ -118,6 +150,7 @@ async def webhook_wppconnect(
     )
 
     # Buscar o crear cliente por su número de teléfono
+    wa_id, display_name, profile_name, business_name, contact_metadata = _extract_contact_metadata(payload)
     cust_result = await db.execute(
         select(Customer).where(
             Customer.phone.contains(from_clean),
@@ -133,11 +166,21 @@ async def webhook_wppconnect(
             business_id=business_id,
             phone=from_clean,
             has_whatsapp=True,
+            whatsapp_wa_id=wa_id,
+            whatsapp_display_name=display_name,
+            whatsapp_profile_name=profile_name,
+            whatsapp_business_name=business_name,
+            whatsapp_metadata=contact_metadata,
         )
         db.add(customer)
         await db.flush()
     else:
         logger.info("Webhook WPPConnect reutilizando cliente id=%s name=%s", customer.id, customer.name)
+        customer.whatsapp_wa_id = wa_id or customer.whatsapp_wa_id
+        customer.whatsapp_display_name = display_name or customer.whatsapp_display_name
+        customer.whatsapp_profile_name = profile_name or customer.whatsapp_profile_name
+        customer.whatsapp_business_name = business_name or customer.whatsapp_business_name
+        customer.whatsapp_metadata = contact_metadata
 
     # Buscar sesión activa (active_bot o waiting_operator) del cliente
     sess_result = await db.execute(
@@ -177,6 +220,14 @@ async def webhook_wppconnect(
             session_id=session.id,
             direction="inbound",
             content=content,
+            external_message_id=str(
+                payload.get("id")
+                or payload.get("messageId")
+                or payload.get("data", {}).get("id", "")
+            ) or None,
+            sender_phone=from_clean,
+            sender_name=display_name or profile_name,
+            raw_payload=payload,
         )
         db.add(msg)
         session.last_message_at = _now()

@@ -94,6 +94,10 @@ class Message(Base):
     )
     direction: Mapped[str] = mapped_column(MESSAGE_DIRECTION_ENUM, nullable=False)
     content: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    external_message_id: Mapped[str | None] = mapped_column(sa.String(120), nullable=True)
+    sender_phone: Mapped[str | None] = mapped_column(sa.String(30), nullable=True)
+    sender_name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
+    raw_payload: Mapped[dict | None] = mapped_column(sa.JSON(), nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=False, default=_now
     )

@@ -37,6 +37,12 @@ class Customer(Base):
     phone: Mapped[str] = mapped_column(sa.String(30), nullable=False)
     # Nombre obtenido del chatbot en el primer pedido
     name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
+    # Identidad WhatsApp reportada por WPPConnect para facilitar matching y soporte.
+    whatsapp_wa_id: Mapped[str | None] = mapped_column(sa.String(120), nullable=True)
+    whatsapp_display_name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
+    whatsapp_profile_name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
+    whatsapp_business_name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
+    whatsapp_metadata: Mapped[dict | None] = mapped_column(sa.JSON(), nullable=True)
     address: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     # False → no se envían notificaciones automáticas por WhatsApp
     has_whatsapp: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False, server_default=sa.true())

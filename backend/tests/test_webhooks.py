@@ -88,6 +88,9 @@ async def test_webhook_wppconnect_numero_no_registrado() -> None:
 @pytest.mark.asyncio
 async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
     """Mensaje a número registrado crea sesión y guarda el mensaje."""
+    from app.core.db import AsyncSessionLocal
+    from app.models.conversation import Message
+
     with patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
@@ -130,6 +133,16 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
     assert data["ok"] is True
     assert "session_id" in data
 
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            __import__("sqlalchemy", fromlist=["select"]).select(Message).where(Message.session_id == uuid.UUID(data["session_id"]))
+        )
+        messages = list(result.scalars().all())
+        assert len(messages) == 1
+        assert messages[0].sender_phone == "549111222333"
+        assert messages[0].content == "Quiero una muzza grande"
+        assert messages[0].raw_payload is not None
+
 
 @pytest.mark.asyncio
 async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
@@ -171,6 +184,13 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
                     "to": f"{phone_clean}@c.us",
                     "from": f"+{cliente_phone}@s.whatsapp.net",
                     "body": "Hola, ya soy cliente",
+                    "notifyName": "Juan WA",
+                    "sender": {
+                        "id": f"{cliente_phone}@s.whatsapp.net",
+                        "pushname": "Juan Push",
+                        "name": "Juan Perfil",
+                        "verifiedName": "Juan Negocio",
+                    },
                 },
             )
 
@@ -184,6 +204,11 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
             assert len(customers) == 1
             assert str(customers[0].id) == cliente_id
             assert customers[0].name == "Juan Cliente"
+            assert customers[0].whatsapp_wa_id == f"{cliente_phone}@s.whatsapp.net"
+            assert customers[0].whatsapp_display_name == "Juan Push"
+            assert customers[0].whatsapp_profile_name == "Juan Perfil"
+            assert customers[0].whatsapp_business_name == "Juan Negocio"
+            assert customers[0].whatsapp_metadata is not None
 
             session_result = await db.execute(
                 __import__("sqlalchemy", fromlist=["select"]).select(ConversationSession).where(

@@ -9,3 +9,4 @@
 [ ] 2.c Mostrar el estado de la conversacion en la lista de conversaciones
 [ ] 2.d Mostrar el nombre del cliente en la lista de conversaciones
 [ ] 2.e Mostrar el numero de telefono en la lista de conversaciones
+[ ] 3. Asegurar que cuando un telefono se da de baja previamente se cierra la session con el wppconnect. Un telefono activo solo puede tener una sesion abierta en wppconnect, el resto se deben cerrar. Utilizar la api de wppconnect para cerrar las sesiones.

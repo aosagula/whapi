@@ -269,6 +269,33 @@ async def test_status_wpp_no_toma_islogged_false_como_conectado() -> None:
 
 
 @pytest.mark.asyncio
+async def test_iniciar_sesion_wpp_usa_webhook_configurado() -> None:
+    """La sesión de WPPConnect debe iniciarse con el webhook configurado en .env."""
+    with patch(
+        "app.services.whatsapp._generar_token_wpp",
+        new_callable=AsyncMock,
+        return_value="tok123",
+    ), patch(
+        "app.services.whatsapp._wpp_request",
+        new_callable=AsyncMock,
+        return_value={},
+    ) as mock_request, patch.object(
+        whatsapp_service.settings,
+        "WPPCONNECT_WEBHOOK_URL",
+        "https://example.com/webhooks/wppconnect",
+    ):
+        token = await whatsapp_service._iniciar_sesion_wpp("sess_test")
+
+    assert token == "tok123"
+    mock_request.assert_awaited_once_with(
+        "POST",
+        "/api/sess_test/start-session",
+        json={"webhook": "https://example.com/webhooks/wppconnect", "waitQrCode": False},
+        token="tok123",
+    )
+
+
+@pytest.mark.asyncio
 async def test_obtener_qr_fuerza_scanning_si_hay_qr_disponible() -> None:
     """Si el proveedor entrega QR, el número debe quedar en scanning aunque el status sea ambiguo."""
     with patch(

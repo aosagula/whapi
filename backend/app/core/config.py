@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     WPPCONNECT_HOST: str = ""
     WPPCONNECT_PORT: int = 443
     WPPCONNECT_SECRET_KEY: str = ""
+    WPPCONNECT_WEBHOOK_URL: str = ""
 
     # n8n
     N8N_HOST: str = ""

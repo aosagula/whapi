@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -16,6 +16,8 @@ from app.models.account import Business, User, UserBusiness
 from app.models.conversation import ConversationSession, Message
 from app.models.customer import Customer
 from app.models.order import Order, OrderItem
+from app.models.whatsapp import WhatsappNumber
+from app.services.notificaciones import enviar_mensaje_whatsapp
 
 router = APIRouter(tags=["conversaciones"])
 
@@ -212,7 +214,7 @@ async def listar_conversaciones_activas(
     ctx: tuple[Business, UserBusiness] = Depends(get_membresia),
     db: AsyncSession = Depends(get_db),
 ) -> list[SesionListItem]:
-    """Lista sesiones en espera de operador o derivadas a humano, ordenadas por tiempo de espera."""
+    """Lista chats de WhatsApp del comercio con su estado actual."""
     business, membresia = ctx
 
     if membresia.role not in ROLES_HITL:
@@ -224,8 +226,10 @@ async def listar_conversaciones_activas(
     result = await db.execute(
         select(ConversationSession).where(
             ConversationSession.business_id == business.id,
-            ConversationSession.status.in_(["waiting_operator", "assigned_human"]),
-        ).order_by(ConversationSession.updated_at.asc())
+            ConversationSession.whatsapp_number_id.isnot(None),
+        ).order_by(
+            func.coalesce(ConversationSession.last_message_at, ConversationSession.updated_at).desc()
+        )
     )
     sessions = list(result.scalars().all())
 
@@ -372,6 +376,27 @@ async def enviar_mensaje(
         content=data.content.strip(),
     )
     db.add(message)
+
+    customer_result = await db.execute(
+        select(Customer).where(Customer.id == session.customer_id)
+    )
+    customer = customer_result.scalar_one()
+
+    if session.whatsapp_number_id:
+        numero_result = await db.execute(
+            select(WhatsappNumber).where(
+                WhatsappNumber.id == session.whatsapp_number_id,
+                WhatsappNumber.business_id == business.id,
+            )
+        )
+        numero = numero_result.scalar_one_or_none()
+        if numero and numero.session_name:
+            await enviar_mensaje_whatsapp(
+                customer.phone,
+                data.content.strip(),
+                numero.session_name,
+                token=numero.wpp_token,
+            )
 
     # Actualizar last_message_at de la sesión
     session.last_message_at = datetime.now(timezone.utc)

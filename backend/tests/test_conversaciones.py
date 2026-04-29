@@ -73,6 +73,24 @@ async def _crear_sesion_waiting(
         return str(session.id)
 
 
+async def _crear_numero_whatsapp(client: AsyncClient, token: str, cid: str, phone: str | None = None) -> str:
+    from unittest.mock import AsyncMock, patch
+
+    wa_phone = phone or f"+549{uuid.uuid4().int % 10**10:010d}"
+    with patch(
+        "app.services.whatsapp._iniciar_sesion_wpp",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        resp = await client.post(
+            f"/comercios/{cid}/whatsapp",
+            json={"phone_number": wa_phone, "label": "Principal"},
+            headers=_auth(token),
+        )
+    assert resp.status_code == 201
+    return resp.json()["id"]
+
+
 # ── Tests de listado ──────────────────────────────────────────────────────────
 
 @pytest.mark.anyio
@@ -88,9 +106,24 @@ async def test_listar_conversaciones_vacio():
 @pytest.mark.anyio
 async def test_listar_conversaciones_muestra_waiting():
     """Las sesiones en waiting_operator aparecen en el listado."""
+    from app.core.db import AsyncSessionLocal
+    from app.models.conversation import ConversationSession
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
         token, cid, cliente_id = await _setup(client)
-        session_id = await _crear_sesion_waiting(client, token, cid, cliente_id)
+        wa_id = await _crear_numero_whatsapp(client, token, cid)
+
+        async with AsyncSessionLocal() as db:
+            session = ConversationSession(
+                business_id=uuid.UUID(cid),
+                customer_id=uuid.UUID(cliente_id),
+                whatsapp_number_id=uuid.UUID(wa_id),
+                status="waiting_operator",
+            )
+            db.add(session)
+            await db.commit()
+            await db.refresh(session)
+            session_id = str(session.id)
 
         resp = await client.get(f"/comercios/{cid}/conversaciones", headers=_auth(token))
         assert resp.status_code == 200
@@ -98,24 +131,62 @@ async def test_listar_conversaciones_muestra_waiting():
         assert len(data) == 1
         assert data[0]["id"] == session_id
         assert data[0]["status"] == "waiting_operator"
+        assert data[0]["customer"]["name"] == "Cliente HITL"
         assert data[0]["customer"]["phone"] == "1155551234"
 
 
 @pytest.mark.anyio
-async def test_listar_conversaciones_no_muestra_cerradas():
-    """Las sesiones closed o active_bot no aparecen en el listado."""
+async def test_listar_conversaciones_muestra_todos_los_estados_whatsapp():
+    """El listado muestra chats de WhatsApp incluso si están en bot activo o cerrados."""
+    from app.core.db import AsyncSessionLocal
+    from app.models.conversation import ConversationSession
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+        token, cid, cliente_id = await _setup(client)
+        wa_id = await _crear_numero_whatsapp(client, token, cid)
+
+        async with AsyncSessionLocal() as db:
+            waiting = ConversationSession(
+                business_id=uuid.UUID(cid),
+                customer_id=uuid.UUID(cliente_id),
+                whatsapp_number_id=uuid.UUID(wa_id),
+                status="waiting_operator",
+            )
+            active_bot = ConversationSession(
+                business_id=uuid.UUID(cid),
+                customer_id=uuid.UUID(cliente_id),
+                whatsapp_number_id=uuid.UUID(wa_id),
+                status="active_bot",
+            )
+            closed = ConversationSession(
+                business_id=uuid.UUID(cid),
+                customer_id=uuid.UUID(cliente_id),
+                whatsapp_number_id=uuid.UUID(wa_id),
+                status="closed",
+            )
+            db.add_all([waiting, active_bot, closed])
+            await db.commit()
+
+        resp = await client.get(f"/comercios/{cid}/conversaciones", headers=_auth(token))
+        assert resp.status_code == 200
+        estados = {item["status"] for item in resp.json()}
+        assert estados == {"waiting_operator", "active_bot", "closed"}
+
+
+@pytest.mark.anyio
+async def test_listar_conversaciones_ignora_sesiones_sin_whatsapp():
+    """La vista de conversaciones solo muestra chats vinculados a un número de WhatsApp."""
     from app.core.db import AsyncSessionLocal
     from app.models.conversation import ConversationSession
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
         token, cid, cliente_id = await _setup(client)
 
-        # Crear sesión cerrada
         async with AsyncSessionLocal() as db:
             session = ConversationSession(
                 business_id=uuid.UUID(cid),
                 customer_id=uuid.UUID(cliente_id),
-                status="closed",
+                status="waiting_operator",
             )
             db.add(session)
             await db.commit()

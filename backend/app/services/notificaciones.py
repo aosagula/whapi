@@ -116,15 +116,24 @@ async def enviar_mensaje_whatsapp(
     if not (host.startswith("http://") or host.startswith("https://")):
         host = f"http://{host}:{settings.WPPCONNECT_PORT}"
     url = f"{host}/api/{session_name}/send-message"
+    logger.info(
+        "Enviando mensaje WhatsApp a %s usando sesión %s",
+        phone_normalized,
+        session_name,
+    )
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
+            resp = await client.post(
                 url,
                 json={"phone": f"{phone_normalized}@c.us", "message": message},
                 headers=headers,
             )
-        logger.info("Notificación enviada a %s", phone)
+        logger.info(
+            "Mensaje WhatsApp enviado a %s con status %s",
+            phone,
+            resp.status_code,
+        )
     except Exception as exc:  # noqa: BLE001
         # Las notificaciones nunca deben bloquear la operación principal
         logger.warning("No se pudo enviar notificación a %s: %s", phone, exc)

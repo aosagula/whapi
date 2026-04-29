@@ -31,6 +31,11 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _normalize_phone(value: str) -> str:
+    """Normaliza un teléfono de WhatsApp al formato internacional sin prefijos de WA ni '+'."""
+    return value.replace("@c.us", "").replace("@s.whatsapp.net", "").split("@")[0].lstrip("+").strip()
+
+
 # ── Webhook WPPConnect ────────────────────────────────────────────────────────
 
 @router.post("/wppconnect", status_code=status.HTTP_200_OK)
@@ -49,10 +54,14 @@ async def webhook_wppconnect(
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload inválido")
 
+    logger.info("Webhook WPPConnect recibido: %s", payload)
+
     event_type = payload.get("event") or payload.get("type", "")
+    logger.info("Webhook WPPConnect event_type=%s", event_type)
 
     # Solo procesar mensajes entrantes
     if event_type not in ("onmessage", "message", "received"):
+        logger.info("Webhook WPPConnect ignorado por tipo de evento: %s", event_type)
         return {"ok": True, "skipped": True}
 
     # Extraer campos del payload de WPPConnect
@@ -73,10 +82,17 @@ async def webhook_wppconnect(
         or payload.get("message", "")
         or ""
     )
+    logger.info(
+        "Webhook WPPConnect datos extraídos to=%s from=%s content=%s",
+        to_number,
+        from_number,
+        content,
+    )
 
     # Normalizar números (quitar @c.us, @s.whatsapp.net, etc.)
-    to_clean = to_number.split("@")[0].lstrip("+")
-    from_clean = from_number.split("@")[0].lstrip("+")
+    to_clean = _normalize_phone(to_number)
+    from_clean = _normalize_phone(from_number)
+    logger.info("Webhook WPPConnect normalizado to=%s from=%s", to_clean, from_clean)
 
     if not to_clean or not from_clean:
         logger.debug("Webhook WPPConnect sin número origen/destino: %s", payload)
@@ -95,6 +111,11 @@ async def webhook_wppconnect(
         return {"ok": True, "skipped": True}
 
     business_id = wa_number.business_id
+    logger.info(
+        "Webhook WPPConnect resuelto a comercio=%s whatsapp_number_id=%s",
+        business_id,
+        wa_number.id,
+    )
 
     # Buscar o crear cliente por su número de teléfono
     cust_result = await db.execute(
@@ -107,13 +128,16 @@ async def webhook_wppconnect(
 
     if customer is None:
         # Crear cliente anónimo para la sesión
+        logger.info("Webhook WPPConnect creando cliente nuevo phone=%s", from_clean)
         customer = Customer(
             business_id=business_id,
-            phone=f"+{from_clean}",
+            phone=from_clean,
             has_whatsapp=True,
         )
         db.add(customer)
         await db.flush()
+    else:
+        logger.info("Webhook WPPConnect reutilizando cliente id=%s name=%s", customer.id, customer.name)
 
     # Buscar sesión activa (active_bot o waiting_operator) del cliente
     sess_result = await db.execute(
@@ -130,6 +154,7 @@ async def webhook_wppconnect(
 
     if session is None:
         # Crear nueva sesión
+        logger.info("Webhook WPPConnect creando nueva sesión para cliente=%s", customer.id)
         session = ConversationSession(
             business_id=business_id,
             customer_id=customer.id,
@@ -138,9 +163,16 @@ async def webhook_wppconnect(
         )
         db.add(session)
         await db.flush()
+    else:
+        logger.info(
+            "Webhook WPPConnect reutilizando sesión id=%s status=%s",
+            session.id,
+            session.status,
+        )
 
     # Guardar el mensaje entrante
     if content:
+        logger.info("Webhook WPPConnect guardando mensaje inbound en sesión=%s", session.id)
         msg = Message(
             session_id=session.id,
             direction="inbound",
@@ -148,6 +180,8 @@ async def webhook_wppconnect(
         )
         db.add(msg)
         session.last_message_at = _now()
+    else:
+        logger.info("Webhook WPPConnect sin contenido; no se persiste mensaje")
 
     await db.commit()
     logger.info(

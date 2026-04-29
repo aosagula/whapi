@@ -131,6 +131,70 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
     assert "session_id" in data
 
 
+@pytest.mark.asyncio
+async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
+    """Si el teléfono ya existe como cliente, el chat debe quedar asociado a ese cliente conocido."""
+    from app.core.db import AsyncSessionLocal
+    from app.models.conversation import ConversationSession
+    from app.models.customer import Customer
+
+    with patch(
+        "app.services.whatsapp._iniciar_sesion_wpp",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        async with await _make_client() as client:
+            comercio, token = await _setup_comercio(client, "wh_known")
+
+            phone = f"+549{uuid.uuid4().int % 10**10:010d}"
+            r_wa = await client.post(
+                f"/comercios/{comercio['id']}/whatsapp",
+                json={"phone_number": phone, "label": "Principal"},
+                headers=_auth(token),
+            )
+            assert r_wa.status_code == 201
+
+            cliente_phone = "549111222333"
+            r_cliente = await client.post(
+                f"/comercios/{comercio['id']}/clientes",
+                json={"phone": cliente_phone, "name": "Juan Cliente"},
+                headers=_auth(token),
+            )
+            assert r_cliente.status_code == 201
+            cliente_id = r_cliente.json()["id"]
+
+            phone_clean = phone.lstrip("+")
+            resp = await client.post(
+                "/webhooks/wppconnect",
+                json={
+                    "event": "onmessage",
+                    "to": f"{phone_clean}@c.us",
+                    "from": f"+{cliente_phone}@s.whatsapp.net",
+                    "body": "Hola, ya soy cliente",
+                },
+            )
+
+        assert resp.status_code == 200
+
+        async with AsyncSessionLocal() as db:
+            customer_result = await db.execute(
+                __import__("sqlalchemy", fromlist=["select"]).select(Customer).where(Customer.business_id == uuid.UUID(comercio["id"]))
+            )
+            customers = list(customer_result.scalars().all())
+            assert len(customers) == 1
+            assert str(customers[0].id) == cliente_id
+            assert customers[0].name == "Juan Cliente"
+
+            session_result = await db.execute(
+                __import__("sqlalchemy", fromlist=["select"]).select(ConversationSession).where(
+                    ConversationSession.business_id == uuid.UUID(comercio["id"])
+                )
+            )
+            sessions = list(session_result.scalars().all())
+            assert len(sessions) == 1
+            assert str(sessions[0].customer_id) == cliente_id
+
+
 # ── Webhook MercadoPago ───────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

@@ -205,6 +205,11 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _normalize_phone(value: str) -> str:
+    """Normaliza un teléfono de WhatsApp al formato internacional sin prefijos de WA ni '+'."""
+    return value.replace("@c.us", "").replace("@s.whatsapp.net", "").split("@")[0].lstrip("+").strip()
+
+
 async def _get_business_or_404(db: AsyncSession, business_id: uuid.UUID):
     """Obtiene el comercio o lanza 404."""
     from app.models.account import Business
@@ -276,7 +281,7 @@ async def resolver_tenant(
     Identifica el comercio (tenant) por el número de WhatsApp destino del mensaje entrante.
     Normaliza el número eliminando '@c.us' y el prefijo '+' si los tiene.
     """
-    numero_normalizado = numero.replace("@c.us", "").lstrip("+")
+    numero_normalizado = _normalize_phone(numero)
     result = await db.execute(
         select(WhatsappNumber).where(
             WhatsappNumber.phone_number == numero_normalizado,
@@ -315,7 +320,7 @@ async def obtener_contexto(
     business = await _get_business_or_404(db, business_id)
 
     # Normalizar número
-    phone_normalizado = phone.replace("@c.us", "").lstrip("+")
+    phone_normalizado = _normalize_phone(phone)
 
     # Cliente: buscar o crear
     cust_result = await db.execute(
@@ -445,7 +450,7 @@ async def buscar_o_crear_cliente(
     db: AsyncSession = Depends(get_db),
 ) -> CustomerInfo:
     """Busca un cliente por teléfono; lo crea si no existe."""
-    phone = data.phone.replace("@c.us", "").lstrip("+")
+    phone = _normalize_phone(data.phone)
     result = await db.execute(
         select(Customer).where(
             Customer.business_id == business_id,

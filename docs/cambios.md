@@ -45,7 +45,7 @@ Plan propuesto para el punto 5:
 - Agregar en sesión o pedido un bloque JSON de estado del agente para campos pendientes, último resumen, intención actual y etapa.
 - Etapas mínimas: consulta general, armado del pedido, validación de entrega, validación de pago, pendiente de comprobante, confirmado, derivado.
 
-[ ] 5.g. Implementar flujo de entrada de mensajes.
+[x] 5.g. Implementar flujo de entrada de mensajes.
 - Webhook WPPConnect guarda mensaje entrante como hoy.
 - El backend detecta sesión activa, arma el contexto y ejecuta el grafo o la máquina de estados.
 - El agente debe primero clasificar si el cliente consulta catálogo, precio, estado de pedido o quiere comprar.

@@ -33,9 +33,9 @@ services:
     env_file: .env
     environment:
       # Dentro del contenedor, localhost no llega al host; se usa host.docker.internal
-      - POSTGRES_HOST=host.docker.internal
+      - POSTGRES_HOST=${POSTGRES_HOST:-host.docker.internal}
       # Puerto del túnel SSH que expone la DB externa en el host
-      - POSTGRES_PORT=5433
+      - POSTGRES_PORT=${POSTGRES_PORT:-5433}
     volumes:
       - ./backend:/app
     # Permite al contenedor alcanzar servicios del host (PostgreSQL, n8n, WPPConnect)

@@ -14,11 +14,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.models.conversation import ConversationSession, Message
 from app.models.customer import Customer
 from app.models.order import Order
 from app.models.whatsapp import WhatsappNumber
+from app.services.agent_inbox import process_incoming_agent_message
 from app.services.notificaciones import notificar_pago_confirmado
 from app.services.mercadopago import verificar_pago
 from app.services.whatsapp import _resolver_pn_lid_wpp
@@ -278,11 +280,22 @@ async def webhook_wppconnect(
         logger.info("Webhook WPPConnect sin contenido; no se persiste mensaje")
 
     await db.commit()
+
+    agent_result: dict | None = None
+    if content and settings.AGENT_ENABLED and session.status == "active_bot":
+        agent_result = await process_incoming_agent_message(
+            db=db,
+            session=session,
+            customer=customer,
+            whatsapp_number=wa_number,
+            latest_user_message=content,
+        )
+
     logger.info(
         "Mensaje entrante de %s para comercio %s guardado en sesión %s",
         resolved_phone, business_id, session.id,
     )
-    return {"ok": True, "session_id": str(session.id)}
+    return {"ok": True, "session_id": str(session.id), "agent": agent_result}
 
 
 # ── Webhook MercadoPago ───────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ services:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
-    env_file: .env
+    env_file: .env.prod
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -16,7 +16,7 @@ services:
 
   ollama-init:
     image: ollama/ollama:latest
-    env_file: .env
+    env_file: .env.prod
     depends_on:
       ollama:
         condition: service_healthy
@@ -31,12 +31,12 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    env_file: .env
+    env_file: .env.prod
     environment:
       # Dentro del contenedor, localhost no llega al host; se usa host.docker.internal
-      - POSTGRES_HOST=host.docker.internal
+      - POSTGRES_HOST=${POSTGRES_HOST:-host.docker.internal}
       # Puerto del túnel SSH que expone la DB externa en el host
-      - POSTGRES_PORT=5433
+      - POSTGRES_PORT=${POSTGRES_PORT:-5433}
     volumes:
       - ./backend:/app
     # Permite al contenedor alcanzar servicios del host (PostgreSQL, n8n, WPPConnect)
@@ -51,7 +51,7 @@ services:
     build: ./frontend
     ports:
       - "3000:3000"
-    env_file: .env
+    env_file: .env.prod
     volumes:
       - ./frontend:/app
       - /app/node_modules

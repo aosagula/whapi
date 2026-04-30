@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from app.main import app
 
@@ -91,7 +92,7 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
     from app.core.db import AsyncSessionLocal
     from app.models.conversation import Message
 
-    with patch(
+    with patch.object(__import__("app.core.config", fromlist=["settings"]).settings, "AGENT_ENABLED", False), patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
         return_value=None,
@@ -146,7 +147,7 @@ async def test_webhook_wppconnect_crea_sesion_y_mensaje() -> None:
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            __import__("sqlalchemy", fromlist=["select"]).select(Message).where(Message.session_id == uuid.UUID(data["session_id"]))
+            select(Message).where(Message.session_id == uuid.UUID(data["session_id"]))
         )
         messages = list(result.scalars().all())
         assert len(messages) == 1
@@ -164,7 +165,7 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
     from app.models.customer import Customer
     cliente_phone = "549111222333"
 
-    with patch(
+    with patch.object(__import__("app.core.config", fromlist=["settings"]).settings, "AGENT_ENABLED", False), patch(
         "app.services.whatsapp._iniciar_sesion_wpp",
         new_callable=AsyncMock,
         return_value=None,
@@ -214,7 +215,7 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
 
         async with AsyncSessionLocal() as db:
             customer_result = await db.execute(
-                __import__("sqlalchemy", fromlist=["select"]).select(Customer).where(Customer.business_id == uuid.UUID(comercio["id"]))
+                select(Customer).where(Customer.business_id == uuid.UUID(comercio["id"]))
             )
             customers = list(customer_result.scalars().all())
             assert len(customers) == 1
@@ -228,13 +229,86 @@ async def test_webhook_wppconnect_reutiliza_cliente_conocido() -> None:
             assert customers[0].whatsapp_metadata is not None
 
             session_result = await db.execute(
-                __import__("sqlalchemy", fromlist=["select"]).select(ConversationSession).where(
+                select(ConversationSession).where(
                     ConversationSession.business_id == uuid.UUID(comercio["id"])
                 )
             )
             sessions = list(session_result.scalars().all())
             assert len(sessions) == 1
             assert str(sessions[0].customer_id) == cliente_id
+
+
+@pytest.mark.asyncio
+async def test_webhook_wppconnect_dispara_agente_y_persiste_estado() -> None:
+    """Con el agente activo, el webhook debe guardar inbound, outbound y agent_state."""
+    from app.core.db import AsyncSessionLocal
+    from app.models.conversation import ConversationSession, Message
+    from app.models.customer import Customer
+
+    with patch(
+        "app.services.whatsapp._iniciar_sesion_wpp",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "app.services.agent_inbox.enviar_mensaje_whatsapp",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        async with await _make_client() as client:
+            comercio, token = await _setup_comercio(client, "wh_agent")
+
+            phone = f"+549{uuid.uuid4().int % 10**10:010d}"
+            r_wa = await client.post(
+                f"/comercios/{comercio['id']}/whatsapp",
+                json={"phone_number": phone, "label": "Principal"},
+                headers=_auth(token),
+            )
+            assert r_wa.status_code == 201
+
+            phone_clean = phone.lstrip("+")
+            resp = await client.post(
+                "/webhooks/wppconnect",
+                json={
+                    "event": "onmessage",
+                    "to": f"{phone_clean}@c.us",
+                    "from": "5491112233445@c.us",
+                    "body": "Que pizzas tienen?",
+                    "notifyName": "Juan WA",
+                    "sender": {
+                        "id": "5491112233445@c.us",
+                        "formattedName": "Juan Cliente",
+                        "pushname": "Juan WA",
+                    },
+                },
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["agent"] is not None
+    assert body["agent"]["decision"]["intent"] == "query_catalog"
+    mock_send.assert_awaited()
+
+    async with AsyncSessionLocal() as db:
+        session_result = await db.execute(
+            select(ConversationSession).where(ConversationSession.id == uuid.UUID(body["session_id"]))
+        )
+        session = session_result.scalar_one()
+        assert session.agent_state is not None
+        assert session.agent_state["current_intent"] == "query_catalog"
+        assert session.agent_state["stage"] == "general_query"
+
+        customer_result = await db.execute(select(Customer).where(Customer.id == session.customer_id))
+        customer = customer_result.scalar_one()
+        assert customer.phone == "5491112233445"
+
+        message_result = await db.execute(
+            select(Message).where(Message.session_id == session.id).order_by(Message.sent_at.asc())
+        )
+        messages = list(message_result.scalars().all())
+        assert len(messages) == 2
+        assert messages[0].direction == "inbound"
+        assert messages[1].direction == "outbound"
+        assert "opciones disponibles" in messages[1].content.lower()
 
 
 # ── Webhook MercadoPago ───────────────────────────────────────────────────────

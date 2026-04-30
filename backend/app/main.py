@@ -64,6 +64,11 @@ async def check_db_on_startup() -> None:
         agent_status.reachable,
         agent_status.detail,
     )
+    if settings.AGENT_ORCHESTRATOR.strip().lower() == "state_machine":
+        logger.warning(
+            "Agent startup mode=state_machine: el backend usa logica heuristica local; los prompts del asistente se cargan en contexto y logs, pero todavia no se envian al modelo %s.",
+            settings.LOCAL_LLM_MODEL,
+        )
 
 
 # Routers — se van agregando fase por fase

@@ -6,6 +6,8 @@ services:
     env_file: .env.prod
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - vps_shared_network
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 15s
@@ -25,6 +27,8 @@ services:
       - OLLAMA_HOST=http://ollama:11434
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - vps_shared_network
     restart: "no"
 
   backend:
@@ -42,6 +46,8 @@ services:
     # Permite al contenedor alcanzar servicios del host (PostgreSQL, n8n, WPPConnect)
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - vps_shared_network
     depends_on:
       ollama:
         condition: service_healthy
@@ -58,7 +64,13 @@ services:
       - /app/.next
     depends_on:
       - backend
+    networks:
+      - vps_shared_network
     restart: unless-stopped
 
 volumes:
   ollama_data:
+
+networks:
+  vps_shared_network:
+    external: true

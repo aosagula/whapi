@@ -1,10 +1,15 @@
-"""Endpoints internos para inferencia controlada del agente."""
+"""Endpoints internos para inferencia y contexto controlado del agente."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException, status
+import uuid
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.schemas.agent import AgentInferenceRequest, AgentInferenceResponse
+from app.core.db import get_db
+from app.schemas.agent import AgentInferenceRequest, AgentInferenceResponse, AgentResolvedContext
+from app.services.agent_context import build_agent_context
 from app.services.agent_orchestrator import infer_agent_turn
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -15,19 +20,40 @@ def _verify_agent_api_key(x_agent_api_key: str = Header(..., alias="X-Agent-Api-
     if not expected or x_agent_api_key != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="X-Agent-Api-Key inválida",
+            detail="X-Agent-Api-Key invalida",
         )
 
 
 @router.post("/infer", response_model=AgentInferenceResponse)
-async def infer(request: AgentInferenceRequest, x_agent_api_key: str = Header(..., alias="X-Agent-Api-Key")) -> AgentInferenceResponse:
-    """Recibe contexto estructurado y devuelve una decisión estructurada del agente."""
+async def infer(
+    request: AgentInferenceRequest,
+    x_agent_api_key: str = Header(..., alias="X-Agent-Api-Key"),
+) -> AgentInferenceResponse:
+    """Recibe contexto estructurado y devuelve una decision estructurada del agente."""
     _verify_agent_api_key(x_agent_api_key)
 
     if not settings.AGENT_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="El agente local está deshabilitado",
+            detail="El agente local esta deshabilitado",
         )
 
     return await infer_agent_turn(request.context)
+
+
+@router.get("/businesses/{business_id}/context", response_model=AgentResolvedContext)
+async def get_context(
+    business_id: uuid.UUID,
+    phone: str = Query(..., description="Telefono del cliente a resolver para el contexto"),
+    recent_messages_limit: int = Query(20, ge=1, le=50),
+    x_agent_api_key: str = Header(..., alias="X-Agent-Api-Key"),
+    db: AsyncSession = Depends(get_db),
+) -> AgentResolvedContext:
+    """Construye el contexto completo del agente para un comercio y cliente."""
+    _verify_agent_api_key(x_agent_api_key)
+    return await build_agent_context(
+        db=db,
+        business_id=business_id,
+        phone=phone,
+        recent_messages_limit=recent_messages_limit,
+    )

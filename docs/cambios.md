@@ -35,7 +35,7 @@ Plan propuesto para el punto 5:
 - No delegar al LLM la escritura directa en base; el LLM solo propone.
 - Validar salida con esquema estricto: intención, mensajes, delivery_type, dirección, items, total, payment_method, missing_fields, requiere_humano.
 
-[ ] 5.e. Construir el contexto del agente por comercio.
+[x] 5.e. Construir el contexto del agente por comercio.
 - Combinar nombre del asistente, system prompt maestro y system prompt por defecto cargados en Ajustes.
 - Inyectar catálogo disponible, combos, precios, recargo mitad y mitad, datos del cliente conocido y pedido en curso.
 - Incluir reglas de negocio explícitas: no inventar productos, no confirmar si faltan datos, no avanzar si no hay total o medio de pago.

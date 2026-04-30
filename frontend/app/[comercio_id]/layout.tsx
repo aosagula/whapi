@@ -26,6 +26,7 @@ import {
   UserCircle,
   LogOut,
   UserCog,
+  Bot,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -117,6 +118,7 @@ export default function ComercioLayout({ children }: { children: React.ReactNode
         { href: `${base}/ajustes/productos`, label: "Productos", icon: Pizza, testId: "nav-productos" },
         { href: `${base}/ajustes/combos`, label: "Combos", icon: Gift, testId: "nav-combos" },
         { href: `${base}/ajustes/whatsapp`, label: "WhatsApp", icon: Smartphone, testId: "nav-whatsapp" },
+        { href: `${base}/ajustes/asistente`, label: "Asistente", icon: Bot, testId: "nav-asistente" },
       ],
     },
     { href: `${base}/reportes`, label: "Reportes", icon: BarChart2, testId: "nav-reportes" },

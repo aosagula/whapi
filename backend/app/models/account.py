@@ -61,6 +61,9 @@ class Business(Base):
     half_half_surcharge: Mapped[float] = mapped_column(
         sa.Numeric(10, 2), default=0, nullable=False
     )
+    assistant_name: Mapped[str | None] = mapped_column(sa.String(150), nullable=True)
+    assistant_system_prompt_master: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    assistant_system_prompt_default: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         sa.TIMESTAMP(timezone=True), default=_now, nullable=False

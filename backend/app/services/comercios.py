@@ -33,6 +33,9 @@ async def crear_comercio(
         address=data.address,
         logo_url=data.logo_url,
         half_half_surcharge=data.half_half_surcharge,
+        assistant_name=data.assistant_name,
+        assistant_system_prompt_master=data.assistant_system_prompt_master,
+        assistant_system_prompt_default=data.assistant_system_prompt_default,
     )
     db.add(business)
     await db.flush()  # obtener el ID antes del commit
@@ -63,6 +66,12 @@ async def editar_comercio(
         business.logo_url = data.logo_url
     if data.half_half_surcharge is not None:
         business.half_half_surcharge = data.half_half_surcharge
+    if data.assistant_name is not None:
+        business.assistant_name = data.assistant_name
+    if data.assistant_system_prompt_master is not None:
+        business.assistant_system_prompt_master = data.assistant_system_prompt_master
+    if data.assistant_system_prompt_default is not None:
+        business.assistant_system_prompt_default = data.assistant_system_prompt_default
     await db.commit()
     await db.refresh(business)
     return business

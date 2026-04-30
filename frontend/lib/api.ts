@@ -65,6 +65,9 @@ export interface ComercioResponse {
   address: string | null
   logo_url: string | null
   half_half_surcharge: string
+  assistant_name: string | null
+  assistant_system_prompt_master: string | null
+  assistant_system_prompt_default: string | null
   is_active: boolean
   role: string
 }
@@ -179,7 +182,18 @@ export const api = {
 
     detalle: (id: string) => request<ComercioResponse>(`/comercios/${id}`),
 
-    editar: (id: string, data: Partial<{ name: string; address: string; logo_url: string; half_half_surcharge: number }>) =>
+    editar: (
+      id: string,
+      data: Partial<{
+        name: string
+        address: string
+        logo_url: string
+        half_half_surcharge: number
+        assistant_name: string
+        assistant_system_prompt_master: string
+        assistant_system_prompt_default: string
+      }>,
+    ) =>
       request<ComercioResponse>(`/comercios/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),

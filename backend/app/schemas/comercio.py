@@ -19,6 +19,9 @@ class ComercioCreate(BaseModel):
     address: str | None = None
     logo_url: str | None = None
     half_half_surcharge: Decimal = Decimal("0")
+    assistant_name: str | None = None
+    assistant_system_prompt_master: str | None = None
+    assistant_system_prompt_default: str | None = None
 
 
 class ComercioUpdate(BaseModel):
@@ -27,6 +30,9 @@ class ComercioUpdate(BaseModel):
     address: str | None = None
     logo_url: str | None = None
     half_half_surcharge: Decimal | None = None
+    assistant_name: str | None = None
+    assistant_system_prompt_master: str | None = None
+    assistant_system_prompt_default: str | None = None
 
 
 class ComercioResponse(BaseModel):
@@ -36,6 +42,9 @@ class ComercioResponse(BaseModel):
     address: str | None
     logo_url: str | None
     half_half_surcharge: Decimal
+    assistant_name: str | None
+    assistant_system_prompt_master: str | None
+    assistant_system_prompt_default: str | None
     is_active: bool
     role: str  # rol del usuario autenticado en este comercio
 

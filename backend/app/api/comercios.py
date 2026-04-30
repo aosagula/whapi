@@ -29,6 +29,9 @@ def _to_response(business: Business, role: str) -> ComercioResponse:
         address=business.address,
         logo_url=business.logo_url,
         half_half_surcharge=business.half_half_surcharge,
+        assistant_name=business.assistant_name,
+        assistant_system_prompt_master=business.assistant_system_prompt_master,
+        assistant_system_prompt_default=business.assistant_system_prompt_default,
         is_active=business.is_active,
         role=role,
     )

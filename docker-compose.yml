@@ -1,4 +1,31 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  ollama-init:
+    image: ollama/ollama:latest
+    env_file: .env
+    depends_on:
+      ollama:
+        condition: service_healthy
+    command: ["pull", "${LOCAL_LLM_MODEL:-gemma3:4b}"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: "no"
+
   backend:
     build: ./backend
     ports:
@@ -14,6 +41,9 @@ services:
     # Permite al contenedor alcanzar servicios del host (PostgreSQL, n8n, WPPConnect)
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -28,3 +58,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  ollama_data:

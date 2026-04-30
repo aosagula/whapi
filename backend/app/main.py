@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 import app.models  # noqa: F401 — registra todos los mappers de SQLAlchemy
 from app.api.auth import router as auth_router
+from app.api.agent import router as agent_router
 from app.api.catalogo import router as catalogo_router
 from app.api.clientes import router as clientes_router
 from app.api.comercios import router as comercios_router
@@ -23,6 +24,7 @@ from app.api.n8n import router as n8n_router
 from app.api.pedidos import router as pedidos_router
 from app.core.config import settings
 from app.core.db import AsyncSessionLocal
+from app.services.agent_runtime import get_agent_runtime_status
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +54,21 @@ async def check_db_on_startup() -> None:
         logger.critical("❌ No se pudo conectar a la base de datos: %s", exc)
         raise RuntimeError("Fallo en la conexión a la base de datos al iniciar") from exc
 
+    agent_status = await get_agent_runtime_status()
+    logger.info(
+        "Agent runtime startup: enabled=%s orchestrator=%s provider=%s model=%s reachable=%s detail=%s",
+        agent_status.enabled,
+        agent_status.orchestrator,
+        agent_status.provider,
+        agent_status.model,
+        agent_status.reachable,
+        agent_status.detail,
+    )
+
 
 # Routers — se van agregando fase por fase
 app.include_router(health_router)
+app.include_router(agent_router)
 app.include_router(auth_router)
 app.include_router(comercios_router)
 app.include_router(empleados_router)

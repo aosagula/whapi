@@ -65,6 +65,8 @@ class ConversationSession(Base):
     last_message_at: Mapped[datetime | None] = mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=True
     )
+    # Estado persistido del agente: etapa, intención, resumen y campos pendientes.
+    agent_state: Mapped[dict | None] = mapped_column(sa.JSON(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.TIMESTAMP(timezone=True), default=_now, nullable=False
     )

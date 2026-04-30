@@ -76,6 +76,18 @@ class AgentInferenceResponse(BaseModel):
     decision: AgentDecision
 
 
+class AgentSessionState(BaseModel):
+    stage: AgentStage = "general_query"
+    current_intent: AgentIntent | None = None
+    missing_fields: list[str] = Field(default_factory=list)
+    last_summary: str | None = None
+    last_user_message: str | None = None
+    requires_human: bool = False
+    draft_order_id: uuid.UUID | None = None
+    active_order_id: uuid.UUID | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
 class AgentAssistantContext(BaseModel):
     name: str
     system_prompt_master: str | None = None
@@ -169,6 +181,7 @@ class AgentResolvedContext(BaseModel):
     business_name: str
     session_id: uuid.UUID
     session_status: str
+    agent_state: AgentSessionState
     assistant: AgentAssistantContext
     customer: AgentCustomerContext
     active_order: AgentOrderContext | None = None

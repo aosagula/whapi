@@ -197,6 +197,7 @@ async def test_agent_context_returns_business_customer_catalog_and_order() -> No
     body = response.json()
     assert body["assistant"]["name"] == "Pia"
     assert "No inventar productos" in body["assistant"]["effective_system_prompt"]
+    assert body["agent_state"]["stage"] == "general_query"
     assert body["customer"]["name"] == "Luciana Coccari"
     assert body["customer"]["phone"] == phone
     assert body["customer"]["whatsapp_wa_id"] == "238465945968878@c.us"
@@ -222,6 +223,7 @@ async def test_agent_context_creates_customer_and_session_when_missing() -> None
 
     assert response.status_code == 200
     body = response.json()
+    assert body["agent_state"]["stage"] == "general_query"
     assert body["customer"]["phone"] == phone
     assert body["session_status"] == "active_bot"
     assert body["active_order"] is None
@@ -239,3 +241,49 @@ async def test_agent_context_creates_customer_and_session_when_missing() -> None
         )
         assert customer_result.scalar_one_or_none() is not None
         assert session_result.scalar_one_or_none() is not None
+
+
+@pytest.mark.asyncio
+async def test_agent_session_state_can_be_persisted() -> None:
+    phone = "5491119988776"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        business = await _register_and_create_business(client, "agent_state")
+
+        context_response = await client.get(
+            f"/agent/businesses/{business['id']}/context",
+            params={"phone": phone},
+            headers={"X-Agent-Api-Key": "agent-local-dev-key"},
+        )
+        assert context_response.status_code == 200
+        session_id = context_response.json()["session_id"]
+
+        patch_response = await client.patch(
+            f"/agent/sessions/{session_id}/state",
+            headers={"X-Agent-Api-Key": "agent-local-dev-key"},
+            json={
+                "stage": "confirming_delivery",
+                "current_intent": "select_delivery_type",
+                "missing_fields": ["street", "door_number", "cross_streets"],
+                "last_summary": "Pedido borrador de una muzza grande.",
+                "last_user_message": "Es para delivery",
+                "requires_human": False,
+                "metadata": {"source": "test"},
+            },
+        )
+        assert patch_response.status_code == 200
+        patched_state = patch_response.json()
+        assert patched_state["stage"] == "confirming_delivery"
+        assert patched_state["current_intent"] == "select_delivery_type"
+        assert patched_state["missing_fields"] == ["street", "door_number", "cross_streets"]
+
+        get_response = await client.get(
+            f"/agent/sessions/{session_id}/state",
+            headers={"X-Agent-Api-Key": "agent-local-dev-key"},
+        )
+
+    assert get_response.status_code == 200
+    state = get_response.json()
+    assert state["stage"] == "confirming_delivery"
+    assert state["last_summary"] == "Pedido borrador de una muzza grande."
+    assert state["metadata"]["source"] == "test"

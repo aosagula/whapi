@@ -8,9 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.schemas.agent import AgentInferenceRequest, AgentInferenceResponse, AgentResolvedContext
+from app.schemas.agent import (
+    AgentInferenceRequest,
+    AgentInferenceResponse,
+    AgentResolvedContext,
+    AgentSessionState,
+)
 from app.services.agent_context import build_agent_context
 from app.services.agent_orchestrator import infer_agent_turn
+from app.services.agent_state import get_agent_session_state, update_agent_session_state
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -57,3 +63,26 @@ async def get_context(
         phone=phone,
         recent_messages_limit=recent_messages_limit,
     )
+
+
+@router.get("/sessions/{session_id}/state", response_model=AgentSessionState)
+async def get_session_state(
+    session_id: uuid.UUID,
+    x_agent_api_key: str = Header(..., alias="X-Agent-Api-Key"),
+    db: AsyncSession = Depends(get_db),
+) -> AgentSessionState:
+    """Obtiene el estado conversacional persistido del agente para una sesion."""
+    _verify_agent_api_key(x_agent_api_key)
+    return await get_agent_session_state(db=db, session_id=session_id)
+
+
+@router.patch("/sessions/{session_id}/state", response_model=AgentSessionState)
+async def patch_session_state(
+    session_id: uuid.UUID,
+    state: AgentSessionState,
+    x_agent_api_key: str = Header(..., alias="X-Agent-Api-Key"),
+    db: AsyncSession = Depends(get_db),
+) -> AgentSessionState:
+    """Actualiza el estado conversacional persistido del agente para una sesion."""
+    _verify_agent_api_key(x_agent_api_key)
+    return await update_agent_session_state(db=db, session_id=session_id, state=state)

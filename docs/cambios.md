@@ -40,7 +40,7 @@ Plan propuesto para el punto 5:
 - Inyectar catálogo disponible, combos, precios, recargo mitad y mitad, datos del cliente conocido y pedido en curso.
 - Incluir reglas de negocio explícitas: no inventar productos, no confirmar si faltan datos, no avanzar si no hay total o medio de pago.
 
-[ ] 5.f. Modelar el estado conversacional mínimo.
+[x] 5.f. Modelar el estado conversacional mínimo.
 - Reutilizar `conversation_sessions` y `orders` existentes.
 - Agregar en sesión o pedido un bloque JSON de estado del agente para campos pendientes, último resumen, intención actual y etapa.
 - Etapas mínimas: consulta general, armado del pedido, validación de entrega, validación de pago, pendiente de comprobante, confirmado, derivado.

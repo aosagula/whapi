@@ -24,6 +24,7 @@ from app.schemas.agent import (
     AgentOrderContext,
     AgentOrderItemContext,
     AgentResolvedContext,
+    AgentSessionState,
 )
 
 
@@ -283,6 +284,16 @@ def _build_assistant_context(business: Business, rules: AgentBusinessRulesContex
     )
 
 
+def _build_session_state(session: ConversationSession, active_order: Order | None) -> AgentSessionState:
+    raw_state = session.agent_state or {}
+    state = AgentSessionState.model_validate(raw_state) if raw_state else AgentSessionState()
+    if active_order is not None:
+        state.active_order_id = active_order.id
+        if state.draft_order_id is None and active_order.status == "in_progress":
+            state.draft_order_id = active_order.id
+    return state
+
+
 async def build_agent_context(
     db: AsyncSession,
     business_id: uuid.UUID,
@@ -317,6 +328,7 @@ async def build_agent_context(
     catalog = await _build_catalog_context(db, business)
     assistant = _build_assistant_context(business, rules)
     order_context = await _build_order_context(db, active_order)
+    session_state = _build_session_state(session, active_order)
 
     await db.commit()
 
@@ -325,6 +337,7 @@ async def build_agent_context(
         business_name=business.name,
         session_id=session.id,
         session_status=session.status,
+        agent_state=session_state,
         assistant=assistant,
         customer=AgentCustomerContext(
             customer_id=customer.id,

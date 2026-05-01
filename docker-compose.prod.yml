@@ -33,6 +33,7 @@ services:
 
   backend:
     build: ./backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     env_file: .env.prod
@@ -41,8 +42,6 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST:-host.docker.internal}
       # Puerto del túnel SSH que expone la DB externa en el host
       - POSTGRES_PORT=${POSTGRES_PORT:-5433}
-    volumes:
-      - ./backend:/app
     # Permite al contenedor alcanzar servicios del host (PostgreSQL, n8n, WPPConnect)
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -54,14 +53,14 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     ports:
       - "3000:3000"
     env_file: .env.prod
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     depends_on:
       - backend
     networks:
